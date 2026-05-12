@@ -11,7 +11,7 @@
     }
   },
   "pathFilters": [
-    ":/src/PANiXiDA.Core.Template/",
+    ":/src/PANiXiDA.Core.Infrastructure.Persistence.Ef/",
     ":/Directory.Build.props",
     ":/Directory.Build.targets",
     ":/Directory.Packages.props",

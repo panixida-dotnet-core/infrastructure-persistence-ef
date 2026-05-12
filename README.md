@@ -1,37 +1,11 @@
 ## What to do after creating a repository from this template
 
-### 1. Rename repository metadata
-- change repository name
-- change solution / project names
-- change package ID
-- change assembly name
-- change repository URLs
-- change ProjectReference in test project
-
-### 2. Update package metadata
-- description
-- tags
-
 ### 3. Update documentation
 - replace this template README with the project README
 - fill all placeholder sections
 - update badges
 - update installation instructions
 - add real usage examples
-
-### 4. Configure GitHub repository
-- check repository visibility
-- configure default branch
-- configure branch protection rules
-- configure Issues / Discussions if needed
-- configure repository description, topics and website
-
-### 5. Prepare the first release
-- update versioning configuration pathFilters in version.json
-- verify NuGet metadata
-- verify README and icon inside the package
-- publish the first package version
-- the version is updated automatically based on the commit history
 
 ---
 
