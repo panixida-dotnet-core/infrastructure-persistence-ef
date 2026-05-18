@@ -1,27 +1,27 @@
 ﻿namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Constants;
 
 /// <summary>
-/// Содержит константы, используемые в EF инфраструктуре.
+/// Defines constants used by the Entity Framework Core persistence infrastructure.
 /// </summary>
 public static class EfConstants
 {
     /// <summary>
-    /// Имя строки подключения к PostgreSQL в конфигурации приложения.
+    /// The application configuration connection string name used for PostgreSQL.
     /// </summary>
     public const string PostgreSqlConnectionStringName = "PostgreSqlConnectionString";
 
     /// <summary>
-    /// Имя shadow-свойства, содержащего дату и время создания сущности.
+    /// The shadow property name that stores the entity creation timestamp.
     /// </summary>
     public const string CreatedAt = "CreatedAt";
 
     /// <summary>
-    /// Имя shadow-свойства, содержащего дату и время последнего изменения сущности.
+    /// The shadow property name that stores the latest entity update timestamp.
     /// </summary>
     public const string UpdatedAt = "UpdatedAt";
 
     /// <summary>
-    /// Имя shadow-свойства, содержащего дату и время мягкого удаления сущности.
+    /// The shadow property name that stores the soft-delete timestamp.
     /// </summary>
     public const string DeletedAt = "DeletedAt";
 }

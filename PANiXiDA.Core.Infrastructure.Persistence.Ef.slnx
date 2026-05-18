@@ -19,6 +19,7 @@
     <Project Path="src/PANiXiDA.Core.Infrastructure.Persistence.Ef/PANiXiDA.Core.Infrastructure.Persistence.Ef.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests/PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.csproj" />
     <Project Path="tests/PANiXiDA.Core.Infrastructure.Persistence.Ef.UnitTests/PANiXiDA.Core.Infrastructure.Persistence.Ef.UnitTests.csproj" />
   </Folder>
 </Solution>

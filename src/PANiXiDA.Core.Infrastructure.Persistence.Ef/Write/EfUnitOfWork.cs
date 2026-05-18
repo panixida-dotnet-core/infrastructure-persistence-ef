@@ -5,11 +5,17 @@ using PANiXiDA.Core.Application.Persistence;
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Write;
 
-public sealed class UnitOfWork<TDbContext>(TDbContext dbContext) : IUnitOfWork
+/// <summary>
+/// Coordinates EF Core persistence changes and transaction boundaries for a write DbContext.
+/// </summary>
+/// <typeparam name="TDbContext">The EF Core DbContext type used by the unit of work.</typeparam>
+/// <param name="dbContext">The DbContext used to persist changes and manage transactions.</param>
+public sealed class EfUnitOfWork<TDbContext>(TDbContext dbContext) : IUnitOfWork
     where TDbContext : DbContext
 {
     private IDbContextTransaction? currentTransaction;
 
+    /// <inheritdoc />
     public bool HasActiveTransaction
     {
         get
@@ -18,11 +24,13 @@ public sealed class UnitOfWork<TDbContext>(TDbContext dbContext) : IUnitOfWork
         }
     }
 
+    /// <inheritdoc />
     public Task SaveChangesAsync(CancellationToken cancellationToken)
     {
         return dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    /// <inheritdoc />
     public async Task ExecuteInTransactionAsync(Func<CancellationToken, Task> action, CancellationToken cancellationToken)
     {
         if (currentTransaction != null)
@@ -51,6 +59,7 @@ public sealed class UnitOfWork<TDbContext>(TDbContext dbContext) : IUnitOfWork
         }
     }
 
+    /// <inheritdoc />
     public async Task BeginTransactionAsync(CancellationToken cancellationToken)
     {
         if (currentTransaction != null)
@@ -61,6 +70,7 @@ public sealed class UnitOfWork<TDbContext>(TDbContext dbContext) : IUnitOfWork
         currentTransaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
     }
 
+    /// <inheritdoc />
     public async Task CommitTransactionAsync(CancellationToken cancellationToken)
     {
         if (currentTransaction == null)
@@ -79,6 +89,7 @@ public sealed class UnitOfWork<TDbContext>(TDbContext dbContext) : IUnitOfWork
         }
     }
 
+    /// <inheritdoc />
     public async Task RollbackTransactionAsync(CancellationToken cancellationToken)
     {
         if (currentTransaction == null)
@@ -97,6 +108,7 @@ public sealed class UnitOfWork<TDbContext>(TDbContext dbContext) : IUnitOfWork
         }
     }
 
+    /// <inheritdoc />
     public async ValueTask DisposeTransactionAsync()
     {
         if (currentTransaction == null)

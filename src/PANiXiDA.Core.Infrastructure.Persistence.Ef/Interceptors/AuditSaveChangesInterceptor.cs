@@ -7,17 +7,18 @@ using PANiXiDA.Core.Infrastructure.Persistence.Ef.Constants;
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Interceptors;
 
 /// <summary>
-/// Обновляет shadow-свойства аудита перед сохранением изменений в <see cref="DbContext"/>.
+/// Updates audit shadow properties before changes are saved by a <see cref="DbContext"/>.
 /// </summary>
+/// <param name="timeProvider">The time provider used to generate UTC audit timestamps.</param>
 internal sealed class AuditSaveChangesInterceptor(TimeProvider timeProvider)
     : SaveChangesInterceptor
 {
     /// <summary>
-    /// Обновляет audit-поля перед синхронным сохранением изменений.
+    /// Updates audit properties before synchronous changes are saved.
     /// </summary>
-    /// <param name="eventData">Данные текущего события сохранения.</param>
-    /// <param name="result">Текущее решение о продолжении перехваченной операции.</param>
-    /// <returns>Результат перехвата операции сохранения.</returns>
+    /// <param name="eventData">The current save operation event data.</param>
+    /// <param name="result">The current interception result.</param>
+    /// <returns>The save operation interception result.</returns>
     public override InterceptionResult<int> SavingChanges(
         DbContextEventData eventData,
         InterceptionResult<int> result)
@@ -27,12 +28,12 @@ internal sealed class AuditSaveChangesInterceptor(TimeProvider timeProvider)
     }
 
     /// <summary>
-    /// Обновляет audit-поля перед асинхронным сохранением изменений.
+    /// Updates audit properties before asynchronous changes are saved.
     /// </summary>
-    /// <param name="eventData">Данные текущего события сохранения.</param>
-    /// <param name="result">Текущее решение о продолжении перехваченной операции.</param>
-    /// <param name="cancellationToken">Токен отмены операции.</param>
-    /// <returns>Результат перехвата операции сохранения.</returns>
+    /// <param name="eventData">The current save operation event data.</param>
+    /// <param name="result">The current interception result.</param>
+    /// <param name="cancellationToken">The token used to cancel the operation.</param>
+    /// <returns>The save operation interception result.</returns>
     public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
         DbContextEventData eventData,
         InterceptionResult<int> result,

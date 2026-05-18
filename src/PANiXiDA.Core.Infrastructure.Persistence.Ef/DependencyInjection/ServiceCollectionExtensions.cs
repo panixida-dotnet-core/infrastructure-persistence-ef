@@ -13,18 +13,18 @@ using PANiXiDA.Core.Infrastructure.Persistence.Ef.Write;
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.DependencyInjection;
 
 /// <summary>
-/// Содержит расширения для регистрации EF Core инфраструктуры в контейнере зависимостей.
+/// Provides extension methods for registering EF Core persistence infrastructure in a dependency injection container.
 /// </summary>
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Регистрирует PostgreSQL write/read DbContext и EF-инфраструктуру.
+    /// Registers PostgreSQL write and read DbContexts with EF Core persistence infrastructure.
     /// </summary>
-    /// <typeparam name="TWriteDbContext">Тип write DbContext.</typeparam>
-    /// <typeparam name="TReadDbContext">Тип read DbContext.</typeparam>
-    /// <param name="serviceCollection">Коллекция сервисов для регистрации.</param>
-    /// <param name="configuration">Конфигурация приложения.</param>
-    /// <returns>Та же коллекция сервисов после регистрации.</returns>
+    /// <typeparam name="TWriteDbContext">The write DbContext type.</typeparam>
+    /// <typeparam name="TReadDbContext">The read DbContext type.</typeparam>
+    /// <param name="serviceCollection">The service collection to register services into.</param>
+    /// <param name="configuration">The application configuration that contains the PostgreSQL connection string.</param>
+    /// <returns>The same service collection after registration.</returns>
     public static IServiceCollection AddPostgreSqlEfRepository<TWriteDbContext, TReadDbContext>(
         this IServiceCollection serviceCollection,
         IConfiguration configuration)
@@ -42,12 +42,12 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Регистрирует только PostgreSQL write DbContext и EF-инфраструктуру.
+    /// Registers only the PostgreSQL write DbContext and EF Core write infrastructure.
     /// </summary>
-    /// <typeparam name="TWriteDbContext">Тип write DbContext.</typeparam>
-    /// <param name="serviceCollection">Коллекция сервисов для регистрации.</param>
-    /// <param name="configuration">Конфигурация приложения.</param>
-    /// <returns>Та же коллекция сервисов после регистрации.</returns>
+    /// <typeparam name="TWriteDbContext">The write DbContext type.</typeparam>
+    /// <param name="serviceCollection">The service collection to register services into.</param>
+    /// <param name="configuration">The application configuration that contains the PostgreSQL connection string.</param>
+    /// <returns>The same service collection after registration.</returns>
     public static IServiceCollection AddPostgreSqlWriteEfRepository<TWriteDbContext>(
         this IServiceCollection serviceCollection,
         IConfiguration configuration)
@@ -62,12 +62,12 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Регистрирует только PostgreSQL read DbContext.
+    /// Registers only the PostgreSQL read DbContext.
     /// </summary>
-    /// <typeparam name="TReadDbContext">Тип read DbContext.</typeparam>
-    /// <param name="serviceCollection">Коллекция сервисов для регистрации.</param>
-    /// <param name="configuration">Конфигурация приложения.</param>
-    /// <returns>Та же коллекция сервисов после регистрации.</returns>
+    /// <typeparam name="TReadDbContext">The read DbContext type.</typeparam>
+    /// <param name="serviceCollection">The service collection to register services into.</param>
+    /// <param name="configuration">The application configuration that contains the PostgreSQL connection string.</param>
+    /// <returns>The same service collection after registration.</returns>
     public static IServiceCollection AddPostgreSqlReadEfRepository<TReadDbContext>(
         this IServiceCollection serviceCollection,
         IConfiguration configuration)
@@ -113,7 +113,7 @@ public static class ServiceCollectionExtensions
         serviceCollection.TryAddEnumerable(
             ServiceDescriptor.Scoped<IInterceptor, AuditSaveChangesInterceptor>());
 
-        serviceCollection.AddScoped<IUnitOfWork, UnitOfWork<TWriteDbContext>>();
+        serviceCollection.AddScoped<IUnitOfWork, EfUnitOfWork<TWriteDbContext>>();
     }
 
     private static string GetPostgreSqlConnectionString(IConfiguration configuration)
