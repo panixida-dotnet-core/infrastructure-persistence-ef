@@ -1,6 +1,7 @@
 using System.Reflection;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Constants;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.DbContexts;
@@ -26,6 +27,27 @@ public sealed class AuditSaveChangesInterceptorTests(PostgreSqlContainerFixture 
 
         context.Aggregates.Add(aggregateRoot);
         await context.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var entry = context.Entry(aggregateRoot);
+        entry.Property<DateTime>(EfConstants.CreatedAt).CurrentValue.Should().Be(now.UtcDateTime);
+        entry.Property<DateTime>(EfConstants.UpdatedAt).CurrentValue.Should().Be(now.UtcDateTime);
+        entry.Property<DateTime?>(EfConstants.DeletedAt).CurrentValue.Should().BeNull();
+    }
+
+    [Fact(DisplayName = "SavingChanges sets audit values when invoked directly")]
+    public async Task SavingChanges_SetsAuditValues_WhenInvokedDirectly()
+    {
+        var now = new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero);
+        await using var context = await fixture.CreateInitializedDbContextAsync<TestWriteDbContext>(
+            options => new TestWriteDbContext(options, []));
+        var aggregateRoot = new TestAggregateRoot(1)
+        {
+            Name = "Created"
+        };
+        var interceptor = new AuditSaveChangesInterceptor(new FixedTimeProvider(now));
+
+        context.Aggregates.Add(aggregateRoot);
+        interceptor.SavingChanges(CreateEventData(context), default);
 
         var entry = context.Entry(aggregateRoot);
         entry.Property<DateTime>(EfConstants.CreatedAt).CurrentValue.Should().Be(now.UtcDateTime);
@@ -187,5 +209,13 @@ public sealed class AuditSaveChangesInterceptorTests(PostgreSqlContainerFixture 
                 [new AuditSaveChangesInterceptor(new FixedTimeProvider(utcNow))]));
 
         return Task.FromResult(context);
+    }
+
+    private static DbContextEventData CreateEventData(DbContext context)
+    {
+        return new DbContextEventData(
+            null!,
+            static (_, _) => string.Empty,
+            context);
     }
 }
