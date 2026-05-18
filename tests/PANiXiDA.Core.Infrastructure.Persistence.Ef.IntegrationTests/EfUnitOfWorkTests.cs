@@ -67,13 +67,15 @@ public sealed class EfUnitOfWorkTests(PostgreSqlContainerFixture fixture)
         var exception = new InvalidOperationException("Failure.");
 
         var act = () => unitOfWork.ExecuteInTransactionAsync(
-            cancellationToken =>
+            async cancellationToken =>
             {
                 context.Entities.Add(new TransactionalEntity
                 {
                     Id = 1,
                     Name = "Rolled back"
                 });
+
+                await Task.Yield();
 
                 throw exception;
             },

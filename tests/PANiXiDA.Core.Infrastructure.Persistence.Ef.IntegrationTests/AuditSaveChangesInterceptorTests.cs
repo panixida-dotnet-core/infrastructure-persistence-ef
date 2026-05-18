@@ -116,6 +116,34 @@ public sealed class AuditSaveChangesInterceptorTests(PostgreSqlContainerFixture 
             .Be(updatedAt.UtcDateTime);
     }
 
+    [Fact(DisplayName = "SavingChangesAsync ignores unchanged entities")]
+    public async Task SavingChangesAsync_IgnoresUnchangedEntities()
+    {
+        var databaseName = PostgreSqlContainerFixture.CreateDatabaseName();
+        var createdAt = new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero);
+        var unchangedAt = new DateTimeOffset(2026, 1, 3, 3, 4, 5, TimeSpan.Zero);
+
+        await using (var createContext = await CreateContextAsync(createdAt, databaseName))
+        {
+            createContext.Aggregates.Add(new TestAggregateRoot(1)
+            {
+                Name = "Created"
+            });
+
+            await createContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using var unchangedContext = await CreateExistingContextAsync(unchangedAt, databaseName);
+        var aggregateRoot = await unchangedContext.Aggregates
+            .SingleAsync(TestContext.Current.CancellationToken);
+
+        await unchangedContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var entry = unchangedContext.Entry(aggregateRoot);
+        entry.Property<DateTime>(EfConstants.CreatedAt).CurrentValue.Should().Be(createdAt.UtcDateTime);
+        entry.Property<DateTime>(EfConstants.UpdatedAt).CurrentValue.Should().Be(createdAt.UtcDateTime);
+    }
+
     [Fact(DisplayName = "SavingChangesAsync converts deleted entities with DeletedAt to soft delete")]
     public async Task SavingChangesAsync_ConvertsDeletedEntitiesWithDeletedAtToSoftDelete()
     {

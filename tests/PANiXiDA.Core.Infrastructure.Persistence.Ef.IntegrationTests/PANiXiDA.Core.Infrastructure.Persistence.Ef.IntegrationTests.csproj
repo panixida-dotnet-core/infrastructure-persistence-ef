@@ -14,7 +14,8 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\src\PANiXiDA.Core.Infrastructure.Persistence.Ef\PANiXiDA.Core.Infrastructure.Persistence.Ef.csproj" />
+        <ProjectReference Include="..\..\src\PANiXiDA.Core.Infrastructure.Persistence.Ef\PANiXiDA.Core.Infrastructure.Persistence.Ef.csproj"
+                          AdditionalProperties="Configuration=Release" />
     </ItemGroup>
 
     <ItemGroup>
