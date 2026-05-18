@@ -1,166 +1,214 @@
-## What to do after creating a repository from this template
+# PANiXiDA.Core.Infrastructure.Persistence.Ef
 
-### 1. Rename repository metadata
-- change repository name
-- change solution / project names
-- change package ID
-- change assembly name
-- change repository URLs
-- change ProjectReference in test project
+`PANiXiDA.Core.Infrastructure.Persistence.Ef` is a .NET library that provides Entity Framework Core persistence infrastructure for PANiXiDA Core applications.
 
-### 2. Update package metadata
-- description
-- tags
-
-### 3. Update documentation
-- replace this template README with the project README
-- fill all placeholder sections
-- update badges
-- update installation instructions
-- add real usage examples
-
-### 4. Configure GitHub repository
-- check repository visibility
-- configure default branch
-- configure branch protection rules
-- configure Issues / Discussions if needed
-- configure repository description, topics and website
-
-### 5. Prepare the first release
-- update versioning configuration pathFilters in version.json
-- verify NuGet metadata
-- verify README and icon inside the package
-- publish the first package version
-- the version is updated automatically based on the commit history
-
----
-
-# Universal README template for the NuGet package
-
-# <PackageName>
-
-`<PackageName>` is a .NET library for <short purpose>.
-
-It is designed for <target audience> who need <main value / main scenario>.
+It is designed for application and infrastructure packages that use `PANiXiDA.Core.Application` persistence abstractions, PostgreSQL, DDD aggregate roots, and read models.
 
 ## Status
 
-[![CI](https://github.com/<OWNER>/<REPOSITORY>/actions/workflows/ci.yml/badge.svg)](https://github.com/<OWNER>/<REPOSITORY>/actions/workflows/ci.yml)
-[![NuGet](https://img.shields.io/nuget/v/<PACKAGE_ID>.svg)](https://www.nuget.org/packages/<PACKAGE_ID>)
-[![NuGet downloads](https://img.shields.io/nuget/dt/<PACKAGE_ID>.svg)](https://www.nuget.org/packages/<PACKAGE_ID>)
+[![CI](https://github.com/panixida-dotnet-core/infrastructure-persistence-ef/actions/workflows/ci.yml/badge.svg)](https://github.com/panixida-dotnet-core/infrastructure-persistence-ef/actions/workflows/ci.yml)
+[![NuGet](https://img.shields.io/nuget/v/PANiXiDA.Core.Infrastructure.Persistence.Ef.svg)](https://www.nuget.org/packages/PANiXiDA.Core.Infrastructure.Persistence.Ef)
+[![NuGet downloads](https://img.shields.io/nuget/dt/PANiXiDA.Core.Infrastructure.Persistence.Ef.svg)](https://www.nuget.org/packages/PANiXiDA.Core.Infrastructure.Persistence.Ef)
 [![Target Framework](https://img.shields.io/badge/target-net10.0-512BD4)](https://dotnet.microsoft.com/)
-[![License](https://img.shields.io/github/license/<OWNER>/<REPOSITORY>.svg)](LICENSE)
+[![License](https://img.shields.io/github/license/panixida-dotnet-core/infrastructure-persistence-ef.svg)](LICENSE)
 
 ## Overview
 
-Describe:
+The package bridges PANiXiDA application-layer persistence contracts with EF Core. It provides base write and read DbContexts, repository base classes, a unit of work implementation, audit shadow properties, soft-delete behavior, PostgreSQL DI registration, and helpers for read-model sorting and pagination.
 
-- what problem this package solves;
-- why it exists;
-- where it fits in the system or ecosystem;
-- how it differs from alternatives, if that matters.
-
-Keep this section short and practical.
+The library is intentionally infrastructure-focused. Domain model design, command/query handlers, and concrete repositories stay in consuming applications.
 
 ## Features
 
-- Feature 1
-- Feature 2
-- Feature 3
-- Feature 4
-- Feature 5
+- PostgreSQL registration extensions for write/read EF Core infrastructure.
+- `WriteDbContext<TDbContext>` with HiLo configuration, optional schema naming, assembly configuration scanning, and plural table names.
+- `ReadDbContext<TDbContext>` with no-tracking queries, automatic read model registration, optional schema naming, and migration exclusion for read models.
+- Base `EfWriteRepository<TDbContext, TId, TAggregateRoot>` integrated with `IAggregateTracker`.
+- `EfUnitOfWork<TDbContext>` implementation for save changes and transaction boundaries.
+- Auditable entity configuration with `CreatedAt`, `UpdatedAt`, and `DeletedAt` shadow properties.
+- SaveChanges interceptor that updates audit values and converts deletes with `DeletedAt` into soft deletes.
+- Read repository helpers for page-based pagination, cursor pagination, dynamic sorting, and projection through `IReadModelMapper`.
 
 ## Quick Start
 
 ### Requirements
 
 - .NET 10 SDK
+- PostgreSQL when using the built-in DI registration methods
+- Docker for local integration tests because they use Testcontainers with PostgreSQL
 
 ### Installation
 
-```xml
-<ItemGroup>
-  <PackageReference Include="<PACKAGE_ID>" Version="..." />
-</ItemGroup>
-````
-
-### Minimal import
-
-```csharp
-using <RootNamespace>;
+```bash
+dotnet add package PANiXiDA.Core.Infrastructure.Persistence.Ef
 ```
 
-### First example
+### Configuration
+
+The built-in PostgreSQL registration methods read the connection string named `PostgreSqlConnectionString`.
+
+```json
+{
+  "ConnectionStrings": {
+    "PostgreSqlConnectionString": "Host=localhost;Port=5432;Database=panixida;Username=postgres;Password=postgres"
+  }
+}
+```
+
+### Register EF Infrastructure
 
 ```csharp
-// Add a minimal example here
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.DbContexts;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.DependencyInjection;
+
+public static class PersistenceRegistration
+{
+    public static IServiceCollection AddPersistence(
+        IServiceCollection services,
+        IConfiguration configuration)
+    {
+        return services.AddPostgreSqlEfRepository<AppWriteDbContext, AppReadDbContext>(
+            configuration);
+    }
+}
+
+public sealed class AppWriteDbContext(
+    DbContextOptions<AppWriteDbContext> options,
+    IEnumerable<IInterceptor> interceptors)
+    : WriteDbContext<AppWriteDbContext>(options, interceptors)
+{
+}
+
+public sealed class AppReadDbContext(
+    DbContextOptions<AppReadDbContext> options)
+    : ReadDbContext<AppReadDbContext>(options)
+{
+}
 ```
+
+Use `AddPostgreSqlWriteEfRepository<TWriteDbContext>` when the application only needs write-side infrastructure, or `AddPostgreSqlReadEfRepository<TReadDbContext>` when it only needs read-side infrastructure.
 
 ## Usage
 
-### Basic usage
+### Write Repository
 
 ```csharp
-// Add a basic example here
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+using PANiXiDA.Core.Application.Persistence;
+using PANiXiDA.Core.Domain.AggregateRoots;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Write;
+
+public sealed class Order(Guid id) : AggregateRoot<Guid>(id)
+{
+    public string Number { get; private set; } = string.Empty;
+}
+
+public sealed class OrderConfiguration : AuditableEntityConfiguration<Order>
+{
+    protected override void ConfigureEntity(EntityTypeBuilder<Order> builder)
+    {
+        builder.HasKey(order => order.Id);
+        builder.Property(order => order.Number).HasMaxLength(64).IsRequired();
+    }
+}
+
+public sealed class OrderRepository(
+    AppWriteDbContext dbContext,
+    IAggregateTracker aggregateTracker)
+    : EfWriteRepository<AppWriteDbContext, Guid, Order>(dbContext, aggregateTracker)
+{
+}
 ```
 
-### Typical scenario
+`EfWriteRepository` marks aggregate roots for insert, update, or delete and tracks touched aggregate roots through `IAggregateTracker`. Persistence is completed by `IUnitOfWork.SaveChangesAsync` or by the transaction pipeline used by the consuming application.
+
+### Read Models
 
 ```csharp
-// Add a realistic example here
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Models;
+
+public sealed class OrderReadDbModel : AuditableReadDbModel<Guid>
+{
+    public string Number { get; set; } = string.Empty;
+}
+
+public sealed record OrderReadModel(Guid Id, string Number);
+
+public sealed class OrderReadModelMapper
+    : IReadModelMapper<Guid, OrderReadDbModel, OrderReadModel>
+{
+    public static IQueryable<OrderReadModel> ProjectTo(IQueryable<OrderReadDbModel> query)
+    {
+        return query.Select(order => new OrderReadModel(order.Id, order.Number));
+    }
+}
 ```
 
-### Advanced scenario
+Concrete `ReadDbModel<TId>` types in the read DbContext assembly are registered automatically. By default they are mapped as no-tracking models and excluded from migrations, which is useful when read models point to tables or views owned by another context.
+
+### Read Repository
 
 ```csharp
-// Add an advanced example here if needed
+using PANiXiDA.Core.Application.Querying.Pagination;
+using PANiXiDA.Core.Application.Querying.Sorting;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read;
+
+public sealed class OrderReadRepository(AppReadDbContext dbContext)
+    : EfReadRepository<AppReadDbContext, Guid, OrderReadDbModel>(dbContext)
+{
+    public Task<OrderReadModel?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
+    {
+        return GetByIdAsync<OrderReadModel, OrderReadModelMapper>(id, cancellationToken);
+    }
+
+    public Task<PaginationResult<OrderReadModel>> GetPageAsync(
+        PaginationParameters pagination,
+        SortParameters sort,
+        CancellationToken cancellationToken)
+    {
+        return GetPagedResultAsync<OrderReadModel, OrderReadModelMapper>(
+            Query,
+            pagination,
+            sort,
+            cancellationToken);
+    }
+}
 ```
 
-## Configuration
+## Behavior Notes
 
-Describe configuration only if the package actually requires it.
-
-Possible topics:
-
-* environment variables;
-* `appsettings.json`;
-* feature flags;
-* external services;
-* secrets;
-* runtime prerequisites.
-
-If the package does not require runtime configuration, say so explicitly.
+- Audit timestamps are stored as EF Core shadow properties for write entities configured through `AuditableEntityConfiguration<TEntity>`.
+- Added entities receive `CreatedAt` and `UpdatedAt`.
+- Modified entities receive a new `UpdatedAt`; `CreatedAt` is marked as not modified.
+- Deleted entities that have `DeletedAt` are converted to modified entities and receive `DeletedAt` and `UpdatedAt`.
+- `AuditableReadDbModel<TId>` and auditable write configurations apply a query filter that hides rows where `DeletedAt` is not null.
+- `EfReadRepository` uses dynamic sorting field names; callers should pass known model property names, not arbitrary user input without validation.
 
 ## Project Structure
 
 ```text
 .
-├── src/
-│   └── <ProjectName>/
-├── tests/
-│   └── <ProjectName>.UnitTests/
-├── .editorconfig
-├── .gitattributes
-├── .gitignore
-├── Directory.Build.props
-├── Directory.Build.targets
-├── Directory.Packages.props
-├── global.json
-├── version.json
-├── LICENSE
-└── README.md
+|-- src/
+|   `-- PANiXiDA.Core.Infrastructure.Persistence.Ef/
+|-- tests/
+|   |-- PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests/
+|   `-- PANiXiDA.Core.Infrastructure.Persistence.Ef.UnitTests/
+|-- .github/workflows/ci.yml
+|-- Directory.Build.props
+|-- Directory.Build.targets
+|-- Directory.Packages.props
+|-- global.json
+|-- version.json
+|-- LICENSE
+`-- README.md
 ```
-
-### Main repository files
-
-* `src/` — source code
-* `tests/` — automated tests
-* `Directory.Build.props` — shared MSBuild settings
-* `Directory.Build.targets` — shared build / packaging settings
-* `Directory.Packages.props` — centralized package versions
-* `global.json` — SDK and tooling configuration
-* `version.json` — versioning configuration
-* `README.md` — package overview and usage documentation
 
 ## Development
 
@@ -183,13 +231,33 @@ dotnet format
 dotnet test --configuration Release
 ```
 
+Integration tests start a PostgreSQL container through Testcontainers. Docker must be running before executing the full test suite.
+
+To run only unit tests:
+
+```bash
+dotnet test tests/PANiXiDA.Core.Infrastructure.Persistence.Ef.UnitTests/PANiXiDA.Core.Infrastructure.Persistence.Ef.UnitTests.csproj --configuration Release
+```
+
+To run only integration tests:
+
+```bash
+dotnet test tests/PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests/PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.csproj --configuration Release
+```
+
+### Test With Coverage
+
+```bash
+dotnet test --configuration Release --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml
+```
+
 ### Pack
 
 ```bash
 dotnet pack --configuration Release
 ```
 
-### Full local validation
+### Full Local Validation
 
 ```bash
 dotnet restore
@@ -199,88 +267,28 @@ dotnet test --configuration Release
 dotnet pack --configuration Release
 ```
 
-### Tooling and conventions
+## Tooling and Conventions
 
 This repository uses:
 
-* .NET 10
-* Nullable enabled
-* Implicit usings enabled
-* Central package management
-* GitHub Actions
-* Nerdbank.GitVersioning
-
-Add more items only if they are actually relevant for the repository.
-
-## API / Contracts / Examples
-
-Describe the public API surface here.
-
-Suggested structure:
-
-* core abstractions;
-* main entry points;
-* key extension methods;
-* important behavioral notes;
-* typical integration examples.
-
-## Roadmap / TODO
-
-Potential future improvements:
-
-* item 1;
-* item 2;
-* item 3.
-
-Remove this section if it does not provide value.
-
-## Contributing
-
-Contributions are welcome.
-
-### General rules
-
-* keep the public API intentional;
-* avoid unnecessary dependencies;
-* preserve repository conventions;
-* do not introduce breaking changes without review;
-* keep documentation updated.
-
-### Code style
-
-* follow the repository `.editorconfig`;
-* prefer readable and explicit code;
-* keep naming consistent with the existing codebase.
-
-### Tests
-
-* add or update tests for meaningful behavior changes;
-* cover both success and failure scenarios where applicable;
-* add regression tests for bug fixes.
-
-### Validation before completion
-
-Run:
-
-```bash
-dotnet restore
-dotnet format
-dotnet build --configuration Release
-dotnet test --configuration Release
-```
+- .NET 10
+- Nullable enabled
+- Implicit usings enabled
+- Central package management
+- Microsoft Testing Platform
+- xUnit v3
+- FluentAssertions
+- Testcontainers for PostgreSQL integration tests
+- Nerdbank.GitVersioning
 
 ## License
 
-This project is licensed under the <LicenseName> license.
+This project is licensed under the Apache-2.0 license.
 
 See the [LICENSE](LICENSE) file for details.
 
-## Maintainers / Contacts
+## Maintainers
 
-Maintained by <Author / Team / Organization>.
+Maintained by PANiXiDA.
 
-For questions or improvements, use:
-
-* GitHub Issues
-* Pull Requests
-* GitHub Discussions, if enabled
+For questions or improvements, use GitHub Issues or Pull Requests.

@@ -1,0 +1,32 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <IsPackable>true</IsPackable>
+
+        <AssemblyName>PANiXiDA.Core.Infrastructure.Persistence.Ef</AssemblyName>
+
+        <PackageId>PANiXiDA.Core.Infrastructure.Persistence.Ef</PackageId>
+        <Description>Core infrastructure abstractions and utilities for Entity Framework Core persistence adapters.</Description>
+        <PackageTags>dotnet;efcore;entity-framework-core;persistence;infrastructure;repository;unit-of-work;ddd;cqrs</PackageTags>
+
+        <RepositoryUrl>https://github.com/panixida-dotnet-core/infrastructure-persistence-ef</RepositoryUrl>
+        <PackageProjectUrl>https://github.com/panixida-dotnet-core/infrastructure-persistence-ef</PackageProjectUrl>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="PANiXiDA.Core.Infrastructure.Persistence.Ef.UnitTests" />
+        <InternalsVisibleTo Include="PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="EFCore.NamingConventions" />
+        <PackageReference Include="Humanizer.Core" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore" />
+        <PackageReference Include="Nerdbank.GitVersioning">
+            <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+        <PackageReference Include="Npgsql" />
+        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+        <PackageReference Include="PANiXiDA.Core.Application" />
+        <PackageReference Include="System.Linq.Dynamic.Core" />
+    </ItemGroup>
+</Project>
