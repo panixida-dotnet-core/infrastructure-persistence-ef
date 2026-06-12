@@ -6,10 +6,10 @@ using PANiXiDA.Core.Application.Persistence;
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Write;
 
 /// <summary>
-/// Coordinates EF Core persistence changes and transaction boundaries for a write DbContext.
+/// Coordinates EF Core transaction boundaries for a write DbContext.
 /// </summary>
 /// <typeparam name="TDbContext">The EF Core DbContext type used by the unit of work.</typeparam>
-/// <param name="dbContext">The DbContext used to persist changes and manage transactions.</param>
+/// <param name="dbContext">The DbContext used to manage transactions.</param>
 public sealed class EfUnitOfWork<TDbContext>(TDbContext dbContext) : IUnitOfWork
     where TDbContext : DbContext
 {
@@ -22,12 +22,6 @@ public sealed class EfUnitOfWork<TDbContext>(TDbContext dbContext) : IUnitOfWork
         {
             return dbContext.Database.CurrentTransaction != null;
         }
-    }
-
-    /// <inheritdoc />
-    public Task SaveChangesAsync(CancellationToken cancellationToken)
-    {
-        return dbContext.SaveChangesAsync(cancellationToken);
     }
 
     /// <inheritdoc />

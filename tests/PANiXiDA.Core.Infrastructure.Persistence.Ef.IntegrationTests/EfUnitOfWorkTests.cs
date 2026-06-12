@@ -10,26 +10,6 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests;
 [Collection(PostgreSqlCollection.Name)]
 public sealed class EfUnitOfWorkTests(PostgreSqlContainerFixture fixture)
 {
-    [Fact(DisplayName = "SaveChangesAsync persists pending changes")]
-    public async Task SaveChangesAsync_PersistsPendingChanges()
-    {
-        var options = await CreateInitializedOptionsAsync();
-
-        await using var context = new TransactionalDbContext(options);
-        var unitOfWork = new EfUnitOfWork<TransactionalDbContext>(context);
-        context.Entities.Add(new TransactionalEntity
-        {
-            Id = 1,
-            Name = "Saved"
-        });
-
-        await unitOfWork.SaveChangesAsync(TestContext.Current.CancellationToken);
-
-        var count = await CountEntitiesAsync(options);
-
-        count.Should().Be(1);
-    }
-
     [Fact(DisplayName = "ExecuteInTransactionAsync commits and saves changes")]
     public async Task ExecuteInTransactionAsync_CommitsAndSavesChanges()
     {

@@ -23,8 +23,8 @@ The library is intentionally infrastructure-focused. Domain model design, comman
 - PostgreSQL registration extensions for write/read EF Core infrastructure.
 - `WriteDbContext<TDbContext>` with HiLo configuration, optional schema naming, assembly configuration scanning, and plural table names.
 - `ReadDbContext<TDbContext>` with no-tracking queries, automatic read model registration, optional schema naming, and migration exclusion for read models.
-- Base `EfWriteRepository<TDbContext, TId, TAggregateRoot>` integrated with `IAggregateTracker`.
-- `EfUnitOfWork<TDbContext>` implementation for save changes and transaction boundaries.
+- Base `EfRepository<TDbContext, TId, TAggregateRoot>` with async persistence operations integrated with `IAggregateTracker`.
+- `EfUnitOfWork<TDbContext>` implementation for transaction boundaries.
 - Auditable entity configuration with `CreatedAt`, `UpdatedAt`, and `DeletedAt` shadow properties.
 - SaveChanges interceptor that updates audit values and converts deletes with `DeletedAt` into soft deletes.
 - Read repository helpers for page-based pagination, cursor pagination, dynamic sorting, and projection through `IReadModelMapper`.
@@ -121,12 +121,12 @@ public sealed class OrderConfiguration : AuditableEntityConfiguration<Order>
 public sealed class OrderRepository(
     AppWriteDbContext dbContext,
     IAggregateTracker aggregateTracker)
-    : EfWriteRepository<AppWriteDbContext, Guid, Order>(dbContext, aggregateTracker)
+    : EfRepository<AppWriteDbContext, Guid, Order>(dbContext, aggregateTracker)
 {
 }
 ```
 
-`EfWriteRepository` marks aggregate roots for insert, update, or delete and tracks touched aggregate roots through `IAggregateTracker`. Persistence is completed by `IUnitOfWork.SaveChangesAsync` or by the transaction pipeline used by the consuming application.
+`EfRepository` persists aggregate roots through `AddAsync`, `UpdateAsync`, and `DeleteAsync`, and tracks touched aggregate roots through `IAggregateTracker`. When a unit-of-work transaction is active, repository saves participate in that transaction and `EfUnitOfWork` commits or rolls it back.
 
 ### Read Models
 

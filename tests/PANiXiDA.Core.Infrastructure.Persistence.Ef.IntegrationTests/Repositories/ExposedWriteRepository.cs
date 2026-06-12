@@ -10,7 +10,7 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.Repositor
 internal sealed class ExposedWriteRepository(
     TestWriteDbContext dbContext,
     IAggregateTracker aggregateTracker)
-    : EfWriteRepository<TestWriteDbContext, int, TestAggregateRoot>(dbContext, aggregateTracker)
+    : EfRepository<TestWriteDbContext, int, TestAggregateRoot>(dbContext, aggregateTracker)
 {
     public IQueryable<TestAggregateRoot> QueryForTest => Query;
     public DbSet<TestAggregateRoot> DbSetForTest => DbSet;

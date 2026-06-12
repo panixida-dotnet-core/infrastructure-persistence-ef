@@ -9,10 +9,10 @@ using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.TestDoubles;
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests;
 
 [Collection(PostgreSqlCollection.Name)]
-public sealed class EfWriteRepositoryTests(PostgreSqlContainerFixture fixture)
+public sealed class EfRepositoryTests(PostgreSqlContainerFixture fixture)
 {
-    [Fact(DisplayName = "EfWriteRepository Add marks aggregate for insert and tracks it")]
-    public async Task Add_MarksAggregateForInsertAndTracksIt()
+    [Fact(DisplayName = "EfRepository AddAsync persists aggregate and tracks it")]
+    public async Task AddAsync_PersistsAggregateAndTracksIt()
     {
         await using var context = await CreateContextAsync();
         var tracker = new FakeAggregateTracker();
@@ -22,13 +22,17 @@ public sealed class EfWriteRepositoryTests(PostgreSqlContainerFixture fixture)
             Name = "Created"
         };
 
-        repository.Add(aggregateRoot);
+        await repository.AddAsync(aggregateRoot, TestContext.Current.CancellationToken);
 
-        context.Entry(aggregateRoot).State.Should().Be(EntityState.Added);
+        context.Entry(aggregateRoot).State.Should().Be(EntityState.Unchanged);
+        var storedAggregateRoot = await context.Aggregates
+            .AsNoTracking()
+            .SingleAsync(item => item.Id == aggregateRoot.Id, TestContext.Current.CancellationToken);
+        storedAggregateRoot.Name.Should().Be("Created");
         tracker.GetAll().Should().ContainSingle().Which.Should().BeSameAs(aggregateRoot);
     }
 
-    [Fact(DisplayName = "EfWriteRepository GetByIdAsync returns detached aggregate when found")]
+    [Fact(DisplayName = "EfRepository GetByIdAsync returns detached aggregate when found")]
     public async Task GetByIdAsync_ReturnsDetachedAggregate_WhenFound()
     {
         await using var context = await CreateContextAsync();
@@ -48,7 +52,7 @@ public sealed class EfWriteRepositoryTests(PostgreSqlContainerFixture fixture)
         context.Entry(aggregateRoot).State.Should().Be(EntityState.Detached);
     }
 
-    [Fact(DisplayName = "EfWriteRepository GetByIdAsync returns null when aggregate is not found")]
+    [Fact(DisplayName = "EfRepository GetByIdAsync returns null when aggregate is not found")]
     public async Task GetByIdAsync_ReturnsNull_WhenAggregateIsNotFound()
     {
         await using var context = await CreateContextAsync();
@@ -59,8 +63,8 @@ public sealed class EfWriteRepositoryTests(PostgreSqlContainerFixture fixture)
         aggregateRoot.Should().BeNull();
     }
 
-    [Fact(DisplayName = "EfWriteRepository Update marks aggregate for update and tracks it")]
-    public async Task Update_MarksAggregateForUpdateAndTracksIt()
+    [Fact(DisplayName = "EfRepository UpdateAsync persists aggregate changes and tracks it")]
+    public async Task UpdateAsync_PersistsAggregateChangesAndTracksIt()
     {
         await using var context = await CreateContextAsync();
         var aggregateRoot = new TestAggregateRoot(1)
@@ -75,14 +79,19 @@ public sealed class EfWriteRepositoryTests(PostgreSqlContainerFixture fixture)
         var repository = new ExposedWriteRepository(context, tracker);
         aggregateRoot.Name = "Updated";
 
-        repository.Update(aggregateRoot);
+        await repository.UpdateAsync(aggregateRoot, TestContext.Current.CancellationToken);
 
-        context.Entry(aggregateRoot).State.Should().Be(EntityState.Modified);
+        context.Entry(aggregateRoot).State.Should().Be(EntityState.Unchanged);
+        context.ChangeTracker.Clear();
+        var storedAggregateRoot = await context.Aggregates
+            .AsNoTracking()
+            .SingleAsync(item => item.Id == aggregateRoot.Id, TestContext.Current.CancellationToken);
+        storedAggregateRoot.Name.Should().Be("Updated");
         tracker.GetAll().Should().ContainSingle().Which.Should().BeSameAs(aggregateRoot);
     }
 
-    [Fact(DisplayName = "EfWriteRepository Delete marks aggregate for deletion and tracks it")]
-    public async Task Delete_MarksAggregateForDeletionAndTracksIt()
+    [Fact(DisplayName = "EfRepository DeleteAsync persists aggregate deletion and tracks it")]
+    public async Task DeleteAsync_PersistsAggregateDeletionAndTracksIt()
     {
         await using var context = await CreateContextAsync();
         var aggregateRoot = new TestAggregateRoot(1)
@@ -95,14 +104,18 @@ public sealed class EfWriteRepositoryTests(PostgreSqlContainerFixture fixture)
         var tracker = new FakeAggregateTracker();
         var repository = new ExposedWriteRepository(context, tracker);
 
-        repository.Delete(aggregateRoot);
+        await repository.DeleteAsync(aggregateRoot, TestContext.Current.CancellationToken);
 
-        context.Entry(aggregateRoot).State.Should().Be(EntityState.Deleted);
+        context.Entry(aggregateRoot).State.Should().Be(EntityState.Detached);
+        var aggregateRootExists = await context.Aggregates
+            .AsNoTracking()
+            .AnyAsync(item => item.Id == aggregateRoot.Id, TestContext.Current.CancellationToken);
+        aggregateRootExists.Should().BeFalse();
         tracker.GetAll().Should().ContainSingle().Which.Should().BeSameAs(aggregateRoot);
     }
 
-    [Fact(DisplayName = "EfWriteRepository exposes base query and DbSet to derived repositories")]
-    public async Task EfWriteRepository_ExposesBaseQueryAndDbSetToDerivedRepositories()
+    [Fact(DisplayName = "EfRepository exposes base query and DbSet to derived repositories")]
+    public async Task EfRepository_ExposesBaseQueryAndDbSetToDerivedRepositories()
     {
         await using var context = await CreateContextAsync();
         var repository = new ExposedWriteRepository(context, new FakeAggregateTracker());
