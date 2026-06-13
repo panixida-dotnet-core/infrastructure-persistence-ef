@@ -24,6 +24,7 @@ The library is intentionally infrastructure-focused. Domain model design, comman
 - `WriteDbContext<TDbContext>` with HiLo configuration, optional schema naming, assembly configuration scanning, and plural table names.
 - `ReadDbContext<TDbContext>` with no-tracking queries, automatic read model registration, optional schema naming, and migration exclusion for read models.
 - Base `EfRepository<TDbContext, TId, TAggregateRoot>` with async persistence operations integrated with `IAggregateTracker`.
+- `AggregateTracker` implementation for tracking touched aggregate roots independently of EF Core.
 - `EfUnitOfWork<TDbContext>` implementation for transaction boundaries.
 - Auditable entity configuration with `CreatedAt`, `UpdatedAt`, and `DeletedAt` shadow properties.
 - SaveChanges interceptor that updates audit values and converts deletes with `DeletedAt` into soft deletes.
@@ -133,7 +134,7 @@ public sealed class OrderRepository(
 }
 ```
 
-`EfRepository` persists aggregate roots through `AddAsync`, `UpdateAsync`, and `DeleteAsync`, and tracks touched aggregate roots through `IAggregateTracker`. When a unit-of-work transaction is active, repository saves participate in that transaction and `EfUnitOfWork` commits or rolls it back.
+`EfRepository` persists aggregate roots through `AddAsync`, `UpdateAsync`, and `DeleteAsync`, and tracks touched aggregate roots through `IAggregateTracker`. The built-in write registration adds the generic `AggregateTracker` implementation as scoped, but consumers can register their own tracker before calling the EF registration methods. When a unit-of-work transaction is active, repository saves participate in that transaction and `EfUnitOfWork` commits or rolls it back.
 
 ### Read Models
 

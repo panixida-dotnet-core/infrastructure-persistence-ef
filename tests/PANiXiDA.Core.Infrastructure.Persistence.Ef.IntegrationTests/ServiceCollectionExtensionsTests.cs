@@ -11,6 +11,7 @@ using PANiXiDA.Core.Infrastructure.Persistence.Ef.Interceptors;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.Repositories.Implementations;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.Repositories.Interfaces;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Write;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Tracking;
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests;
 
@@ -33,6 +34,7 @@ public sealed class ServiceCollectionExtensionsTests(PostgreSqlContainerFixture 
         scope.ServiceProvider.GetRequiredService<TestWriteDbContext>().Should().NotBeNull();
         scope.ServiceProvider.GetRequiredService<TestReadDbContext>().Should().NotBeNull();
         scope.ServiceProvider.GetRequiredService<IUnitOfWork>().Should().BeOfType<EfUnitOfWork<TestWriteDbContext>>();
+        scope.ServiceProvider.GetRequiredService<IAggregateTracker>().Should().BeOfType<AggregateTracker>();
         scope.ServiceProvider.GetRequiredService<TimeProvider>().Should().Be(TimeProvider.System);
         scope.ServiceProvider.GetServices<IInterceptor>()
             .Should()
@@ -70,6 +72,7 @@ public sealed class ServiceCollectionExtensionsTests(PostgreSqlContainerFixture 
         scope.ServiceProvider.GetRequiredService<TestWriteDbContext>().Should().NotBeNull();
         scope.ServiceProvider.GetService<TestReadDbContext>().Should().BeNull();
         scope.ServiceProvider.GetRequiredService<IUnitOfWork>().Should().BeOfType<EfUnitOfWork<TestWriteDbContext>>();
+        scope.ServiceProvider.GetRequiredService<IAggregateTracker>().Should().BeOfType<AggregateTracker>();
         AssertScopedRegistration<IAssemblyWriteRepository, AssemblyWriteRepository>(services);
         services.Should().NotContain(descriptor =>
             descriptor.ServiceType == typeof(IAssemblyReadRepository));
@@ -88,6 +91,7 @@ public sealed class ServiceCollectionExtensionsTests(PostgreSqlContainerFixture 
         scope.ServiceProvider.GetRequiredService<TestReadDbContext>().Should().NotBeNull();
         scope.ServiceProvider.GetService<TestWriteDbContext>().Should().BeNull();
         scope.ServiceProvider.GetService<IUnitOfWork>().Should().BeNull();
+        scope.ServiceProvider.GetService<IAggregateTracker>().Should().BeNull();
         AssertScopedRegistration<IAssemblyReadRepository, AssemblyReadRepository>(services);
         services.Should().NotContain(descriptor =>
             descriptor.ServiceType == typeof(IAssemblyWriteRepository));

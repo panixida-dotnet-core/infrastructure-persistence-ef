@@ -4,7 +4,7 @@ using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.DbContexts;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.Entities;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.Infrastructure;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.Repositories;
-using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.TestDoubles;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Tracking;
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests;
 
@@ -15,7 +15,7 @@ public sealed class EfRepositoryTests(PostgreSqlContainerFixture fixture)
     public async Task AddAsync_PersistsAggregateAndTracksIt()
     {
         await using var context = await CreateContextAsync();
-        var tracker = new FakeAggregateTracker();
+        var tracker = new AggregateTracker();
         var repository = new ExposedWriteRepository(context, tracker);
         var aggregateRoot = new TestAggregateRoot(1)
         {
@@ -43,7 +43,7 @@ public sealed class EfRepositoryTests(PostgreSqlContainerFixture fixture)
         await context.SaveChangesAsync(TestContext.Current.CancellationToken);
         context.ChangeTracker.Clear();
 
-        var repository = new ExposedWriteRepository(context, new FakeAggregateTracker());
+        var repository = new ExposedWriteRepository(context, new AggregateTracker());
 
         var aggregateRoot = await repository.GetByIdAsync(1, TestContext.Current.CancellationToken);
 
@@ -56,7 +56,7 @@ public sealed class EfRepositoryTests(PostgreSqlContainerFixture fixture)
     public async Task GetByIdAsync_ReturnsNull_WhenAggregateIsNotFound()
     {
         await using var context = await CreateContextAsync();
-        var repository = new ExposedWriteRepository(context, new FakeAggregateTracker());
+        var repository = new ExposedWriteRepository(context, new AggregateTracker());
 
         var aggregateRoot = await repository.GetByIdAsync(404, TestContext.Current.CancellationToken);
 
@@ -75,7 +75,7 @@ public sealed class EfRepositoryTests(PostgreSqlContainerFixture fixture)
         await context.SaveChangesAsync(TestContext.Current.CancellationToken);
         context.ChangeTracker.Clear();
 
-        var tracker = new FakeAggregateTracker();
+        var tracker = new AggregateTracker();
         var repository = new ExposedWriteRepository(context, tracker);
         aggregateRoot.Name = "Updated";
 
@@ -101,7 +101,7 @@ public sealed class EfRepositoryTests(PostgreSqlContainerFixture fixture)
         context.Aggregates.Add(aggregateRoot);
         await context.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        var tracker = new FakeAggregateTracker();
+        var tracker = new AggregateTracker();
         var repository = new ExposedWriteRepository(context, tracker);
 
         await repository.DeleteAsync(aggregateRoot, TestContext.Current.CancellationToken);
@@ -118,7 +118,7 @@ public sealed class EfRepositoryTests(PostgreSqlContainerFixture fixture)
     public async Task EfRepository_ExposesBaseQueryAndDbSetToDerivedRepositories()
     {
         await using var context = await CreateContextAsync();
-        var repository = new ExposedWriteRepository(context, new FakeAggregateTracker());
+        var repository = new ExposedWriteRepository(context, new AggregateTracker());
 
         var query = repository.QueryForTest;
         var dbSet = repository.DbSetForTest;
@@ -127,10 +127,10 @@ public sealed class EfRepositoryTests(PostgreSqlContainerFixture fixture)
         dbSet.Should().BeSameAs(context.Aggregates);
     }
 
-    [Fact(DisplayName = "FakeAggregateTracker returns tracked roots and can clear them")]
-    public void FakeAggregateTracker_ReturnsTrackedRootsAndCanClearThem()
+    [Fact(DisplayName = "AggregateTracker returns tracked roots and can clear them")]
+    public void AggregateTracker_ReturnsTrackedRootsAndCanClearThem()
     {
-        var tracker = new FakeAggregateTracker();
+        var tracker = new AggregateTracker();
         var aggregateRoot = new TestAggregateRoot(1);
 
         tracker.Track(aggregateRoot);

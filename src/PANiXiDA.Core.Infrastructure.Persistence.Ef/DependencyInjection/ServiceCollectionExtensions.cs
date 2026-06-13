@@ -9,6 +9,7 @@ using PANiXiDA.Core.Infrastructure.Persistence.Ef.Constants;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.DbContexts;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Extensions;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Interceptors;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Tracking;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Write;
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.DependencyInjection;
@@ -118,6 +119,7 @@ public static class ServiceCollectionExtensions
         serviceCollection.TryAddEnumerable(
             ServiceDescriptor.Scoped<IInterceptor, AuditSaveChangesInterceptor>());
 
+        serviceCollection.TryAddScoped<IAggregateTracker, AggregateTracker>();
         serviceCollection.AddScoped<IUnitOfWork, EfUnitOfWork<TWriteDbContext>>();
     }
 
