@@ -20,7 +20,7 @@ The library is intentionally infrastructure-focused. Domain model design, comman
 
 ## Features
 
-- PostgreSQL registration extensions for write/read EF Core infrastructure.
+- PostgreSQL registration extensions for write/read EF Core infrastructure and scoped repository implementation auto-registration.
 - `WriteDbContext<TDbContext>` with HiLo configuration, optional schema naming, assembly configuration scanning, and plural table names.
 - `ReadDbContext<TDbContext>` with no-tracking queries, automatic read model registration, optional schema naming, and migration exclusion for read models.
 - Base `EfRepository<TDbContext, TId, TAggregateRoot>` with async persistence operations integrated with `IAggregateTracker`.
@@ -92,6 +92,8 @@ public sealed class AppReadDbContext(
 ```
 
 Use `AddPostgreSqlWriteEfRepository<TWriteDbContext>` when the application only needs write-side infrastructure, or `AddPostgreSqlReadEfRepository<TReadDbContext>` when it only needs read-side infrastructure.
+The registration methods scan DbContext assemblies and register concrete repository implementations as scoped services for non-generic application contracts derived from `IRepository<TId, TAggregateRoot>` or `IReadRepository<TId>`.
+Write repository implementations are discovered from the write DbContext assembly, and read repository implementations are discovered from the read DbContext assembly.
 
 ## Usage
 
@@ -101,6 +103,7 @@ Use `AddPostgreSqlWriteEfRepository<TWriteDbContext>` when the application only 
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 using PANiXiDA.Core.Application.Persistence;
+using PANiXiDA.Core.Domain.Abstractions;
 using PANiXiDA.Core.Domain.AggregateRoots;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Write;
 
@@ -118,10 +121,14 @@ public sealed class OrderConfiguration : AuditableEntityConfiguration<Order>
     }
 }
 
+public interface IOrderRepository : IRepository<Guid, Order>
+{
+}
+
 public sealed class OrderRepository(
     AppWriteDbContext dbContext,
     IAggregateTracker aggregateTracker)
-    : EfRepository<AppWriteDbContext, Guid, Order>(dbContext, aggregateTracker)
+    : EfRepository<AppWriteDbContext, Guid, Order>(dbContext, aggregateTracker), IOrderRepository
 {
 }
 ```
@@ -156,12 +163,23 @@ Concrete `ReadDbModel<TId>` types in the read DbContext assembly are registered 
 ### Read Repository
 
 ```csharp
+using PANiXiDA.Core.Application.Persistence;
 using PANiXiDA.Core.Application.Querying.Pagination;
 using PANiXiDA.Core.Application.Querying.Sorting;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read;
 
+public interface IOrderReadRepository : IReadRepository<Guid>
+{
+    Task<OrderReadModel?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
+
+    Task<PaginationResult<OrderReadModel>> GetPageAsync(
+        PaginationParameters pagination,
+        SortParameters sort,
+        CancellationToken cancellationToken);
+}
+
 public sealed class OrderReadRepository(AppReadDbContext dbContext)
-    : EfReadRepository<AppReadDbContext, Guid, OrderReadDbModel>(dbContext)
+    : EfReadRepository<AppReadDbContext, Guid, OrderReadDbModel>(dbContext), IOrderReadRepository
 {
     public Task<OrderReadModel?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
     {
@@ -190,6 +208,7 @@ public sealed class OrderReadRepository(AppReadDbContext dbContext)
 - Deleted entities that have `DeletedAt` are converted to modified entities and receive `DeletedAt` and `UpdatedAt`.
 - `AuditableReadDbModel<TId>` and auditable write configurations apply a query filter that hides rows where `DeletedAt` is not null.
 - `EfReadRepository` uses dynamic sorting field names; callers should pass known model property names, not arbitrary user input without validation.
+- Repository implementation scanning registers concrete, non-abstract, non-generic classes against non-generic contracts that inherit `IRepository<TId, TAggregateRoot>` or `IReadRepository<TId>`. Direct base generic repository interfaces are intentionally ignored.
 
 ## Project Structure
 

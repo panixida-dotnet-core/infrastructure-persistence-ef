@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using PANiXiDA.Core.Application.Persistence;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Constants;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.DbContexts;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Extensions;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Interceptors;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Write;
 
@@ -18,7 +19,7 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.DependencyInjection;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers PostgreSQL write and read DbContexts with EF Core persistence infrastructure.
+    /// Registers PostgreSQL write and read DbContexts with EF Core persistence infrastructure and repository implementations.
     /// </summary>
     /// <typeparam name="TWriteDbContext">The write DbContext type.</typeparam>
     /// <typeparam name="TReadDbContext">The read DbContext type.</typeparam>
@@ -37,12 +38,14 @@ public static class ServiceCollectionExtensions
         RegisterReadDbContext<TReadDbContext>(serviceCollection, connectionString);
 
         RegisterWriteEfInfrastructure<TWriteDbContext>(serviceCollection);
+        serviceCollection.AddWriteRepositoryImplementationsFromAssembly(typeof(TWriteDbContext).Assembly);
+        serviceCollection.AddReadRepositoryImplementationsFromAssembly(typeof(TReadDbContext).Assembly);
 
         return serviceCollection;
     }
 
     /// <summary>
-    /// Registers only the PostgreSQL write DbContext and EF Core write infrastructure.
+    /// Registers only the PostgreSQL write DbContext, EF Core write infrastructure, and write repository implementations.
     /// </summary>
     /// <typeparam name="TWriteDbContext">The write DbContext type.</typeparam>
     /// <param name="serviceCollection">The service collection to register services into.</param>
@@ -57,12 +60,13 @@ public static class ServiceCollectionExtensions
 
         RegisterWriteDbContext<TWriteDbContext>(serviceCollection, connectionString);
         RegisterWriteEfInfrastructure<TWriteDbContext>(serviceCollection);
+        serviceCollection.AddWriteRepositoryImplementationsFromAssembly(typeof(TWriteDbContext).Assembly);
 
         return serviceCollection;
     }
 
     /// <summary>
-    /// Registers only the PostgreSQL read DbContext.
+    /// Registers only the PostgreSQL read DbContext and read repository implementations.
     /// </summary>
     /// <typeparam name="TReadDbContext">The read DbContext type.</typeparam>
     /// <param name="serviceCollection">The service collection to register services into.</param>
@@ -76,6 +80,7 @@ public static class ServiceCollectionExtensions
         var connectionString = GetPostgreSqlConnectionString(configuration);
 
         RegisterReadDbContext<TReadDbContext>(serviceCollection, connectionString);
+        serviceCollection.AddReadRepositoryImplementationsFromAssembly(typeof(TReadDbContext).Assembly);
 
         return serviceCollection;
     }
