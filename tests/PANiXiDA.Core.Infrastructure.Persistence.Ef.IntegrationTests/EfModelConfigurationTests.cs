@@ -152,8 +152,8 @@ public sealed class EfModelConfigurationTests(PostgreSqlContainerFixture fixture
         items[0].Name.Should().Be("Active");
     }
 
-    [Fact(DisplayName = "ModelBuilderExtensions skips owned types, views, and nameless tables")]
-    public void ModelBuilderExtensions_SkipsOwnedTypesViewsAndNamelessTables()
+    [Fact(DisplayName = "ModelBuilderExtensions applies plural table names and preserves explicitly mapped owned tables")]
+    public void ModelBuilderExtensions_AppliesPluralTableNamesAndPreservesExplicitlyMappedOwnedTables()
     {
         var modelBuilder = new ModelBuilder();
         modelBuilder.Entity<ModelBuilderOwner>(builder =>
@@ -163,6 +163,15 @@ public sealed class EfModelConfigurationTests(PostgreSqlContainerFixture fixture
             {
                 ownedBuilder.ToTable("OwnedThing");
             });
+            builder.OwnsMany(item => item.OwnedItems, ownedBuilder =>
+            {
+                ownedBuilder.HasKey(item => item.Id);
+            });
+            builder.OwnsMany(item => item.LegacyOwnedItems, ownedBuilder =>
+            {
+                ownedBuilder.ToTable("LegacyOwnedItem");
+                ownedBuilder.HasKey(item => item.Id);
+            });
         });
         modelBuilder.Entity<ModelBuilderView>().ToView("model_builder_view");
         modelBuilder.Entity<ModelBuilderNameless>().ToTable((string?)null);
@@ -170,12 +179,19 @@ public sealed class EfModelConfigurationTests(PostgreSqlContainerFixture fixture
         modelBuilder.ApplyPluralTableNames();
 
         var ownerType = modelBuilder.Model.FindEntityType(typeof(ModelBuilderOwner))!;
-        var ownedType = modelBuilder.Model.GetEntityTypes().Single(item => item.IsOwned());
+        var ownedType = modelBuilder.Model.GetEntityTypes().Single(item =>
+            item.ClrType == typeof(ModelBuilderOwned));
+        var ownedItemType = modelBuilder.Model.GetEntityTypes().Single(item =>
+            item.ClrType == typeof(ModelBuilderOwnedItem));
+        var legacyOwnedItemType = modelBuilder.Model.GetEntityTypes().Single(item =>
+            item.ClrType == typeof(ModelBuilderLegacyOwnedItem));
         var viewType = modelBuilder.Model.FindEntityType(typeof(ModelBuilderView))!;
         var namelessType = modelBuilder.Model.FindEntityType(typeof(ModelBuilderNameless))!;
 
         ownerType.GetTableName().Should().Be("model_builder_owners");
         ownedType.GetTableName().Should().Be("OwnedThing");
+        ownedItemType.GetTableName().Should().Be("model_builder_owned_items");
+        legacyOwnedItemType.GetTableName().Should().Be("LegacyOwnedItem");
         viewType.GetViewName().Should().Be("model_builder_view");
         namelessType.GetTableName().Should().BeNull();
     }

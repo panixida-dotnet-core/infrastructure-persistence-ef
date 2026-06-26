@@ -1,8 +1,10 @@
 ﻿using Microsoft.EntityFrameworkCore;
 
-using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Models;
-
 using System.Reflection;
+
+using Microsoft.EntityFrameworkCore.Metadata;
+
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Models;
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Extensions;
 
@@ -12,7 +14,7 @@ internal static class ModelBuilderExtensions
     {
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
-            if (entityType.IsOwned())
+            if (entityType.IsOwned() && ShouldSkipOwnedEntityType(entityType))
             {
                 continue;
             }
@@ -30,6 +32,18 @@ internal static class ModelBuilderExtensions
 
             entityType.SetTableName(tableName.ToPluralTableName());
         }
+    }
+
+    private static bool ShouldSkipOwnedEntityType(IMutableEntityType entityType)
+    {
+        var ownership = entityType.FindOwnership();
+        if (ownership?.IsUnique is not false)
+        {
+            return true;
+        }
+
+        return entityType is IConventionEntityType conventionEntityType
+            && conventionEntityType.GetTableNameConfigurationSource() == ConfigurationSource.Explicit;
     }
 
     public static void RegisterReadDbModels(
