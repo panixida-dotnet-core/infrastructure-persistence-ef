@@ -12,6 +12,8 @@ using PANiXiDA.Core.Infrastructure.Persistence.Ef.Interceptors;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Tracking;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Write;
 
+using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
+
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.DependencyInjection;
 
 /// <summary>
@@ -33,10 +35,53 @@ public static class ServiceCollectionExtensions
         where TWriteDbContext : WriteDbContext<TWriteDbContext>
         where TReadDbContext : ReadDbContext<TReadDbContext>
     {
+        return AddPostgreSqlEfRepositoryCore<TWriteDbContext, TReadDbContext>(
+            serviceCollection,
+            configuration,
+            migrationsHistorySchemaName: null);
+    }
+
+    /// <summary>
+    /// Registers PostgreSQL write and read DbContexts with a module-specific migrations history schema.
+    /// </summary>
+    /// <typeparam name="TWriteDbContext">The write DbContext type.</typeparam>
+    /// <typeparam name="TReadDbContext">The read DbContext type.</typeparam>
+    /// <param name="serviceCollection">The service collection to register services into.</param>
+    /// <param name="configuration">The application configuration that contains the PostgreSQL connection string.</param>
+    /// <param name="migrationsHistorySchemaName">The PostgreSQL schema for the EF migrations history table.</param>
+    /// <returns>The same service collection after registration.</returns>
+    public static IServiceCollection AddPostgreSqlEfRepository<TWriteDbContext, TReadDbContext>(
+        this IServiceCollection serviceCollection,
+        IConfiguration configuration,
+        string migrationsHistorySchemaName)
+        where TWriteDbContext : WriteDbContext<TWriteDbContext>
+        where TReadDbContext : ReadDbContext<TReadDbContext>
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(migrationsHistorySchemaName);
+
+        return AddPostgreSqlEfRepositoryCore<TWriteDbContext, TReadDbContext>(
+            serviceCollection,
+            configuration,
+            migrationsHistorySchemaName);
+    }
+
+    private static IServiceCollection AddPostgreSqlEfRepositoryCore<TWriteDbContext, TReadDbContext>(
+        IServiceCollection serviceCollection,
+        IConfiguration configuration,
+        string? migrationsHistorySchemaName)
+        where TWriteDbContext : WriteDbContext<TWriteDbContext>
+        where TReadDbContext : ReadDbContext<TReadDbContext>
+    {
         var connectionString = GetPostgreSqlConnectionString(configuration);
 
-        RegisterWriteDbContext<TWriteDbContext>(serviceCollection, connectionString);
-        RegisterReadDbContext<TReadDbContext>(serviceCollection, connectionString);
+        RegisterWriteDbContext<TWriteDbContext>(
+            serviceCollection,
+            connectionString,
+            migrationsHistorySchemaName);
+        RegisterReadDbContext<TReadDbContext>(
+            serviceCollection,
+            connectionString,
+            migrationsHistorySchemaName);
 
         RegisterWriteEfInfrastructure<TWriteDbContext>(serviceCollection);
         serviceCollection.AddWriteRepositoryImplementationsFromAssembly(typeof(TWriteDbContext).Assembly);
@@ -57,9 +102,46 @@ public static class ServiceCollectionExtensions
         IConfiguration configuration)
         where TWriteDbContext : WriteDbContext<TWriteDbContext>
     {
+        return AddPostgreSqlWriteEfRepositoryCore<TWriteDbContext>(
+            serviceCollection,
+            configuration,
+            migrationsHistorySchemaName: null);
+    }
+
+    /// <summary>
+    /// Registers the PostgreSQL write DbContext with a module-specific migrations history schema.
+    /// </summary>
+    /// <typeparam name="TWriteDbContext">The write DbContext type.</typeparam>
+    /// <param name="serviceCollection">The service collection to register services into.</param>
+    /// <param name="configuration">The application configuration that contains the PostgreSQL connection string.</param>
+    /// <param name="migrationsHistorySchemaName">The PostgreSQL schema for the EF migrations history table.</param>
+    /// <returns>The same service collection after registration.</returns>
+    public static IServiceCollection AddPostgreSqlWriteEfRepository<TWriteDbContext>(
+        this IServiceCollection serviceCollection,
+        IConfiguration configuration,
+        string migrationsHistorySchemaName)
+        where TWriteDbContext : WriteDbContext<TWriteDbContext>
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(migrationsHistorySchemaName);
+
+        return AddPostgreSqlWriteEfRepositoryCore<TWriteDbContext>(
+            serviceCollection,
+            configuration,
+            migrationsHistorySchemaName);
+    }
+
+    private static IServiceCollection AddPostgreSqlWriteEfRepositoryCore<TWriteDbContext>(
+        IServiceCollection serviceCollection,
+        IConfiguration configuration,
+        string? migrationsHistorySchemaName)
+        where TWriteDbContext : WriteDbContext<TWriteDbContext>
+    {
         var connectionString = GetPostgreSqlConnectionString(configuration);
 
-        RegisterWriteDbContext<TWriteDbContext>(serviceCollection, connectionString);
+        RegisterWriteDbContext<TWriteDbContext>(
+            serviceCollection,
+            connectionString,
+            migrationsHistorySchemaName);
         RegisterWriteEfInfrastructure<TWriteDbContext>(serviceCollection);
         serviceCollection.AddWriteRepositoryImplementationsFromAssembly(typeof(TWriteDbContext).Assembly);
 
@@ -78,9 +160,46 @@ public static class ServiceCollectionExtensions
         IConfiguration configuration)
         where TReadDbContext : ReadDbContext<TReadDbContext>
     {
+        return AddPostgreSqlReadEfRepositoryCore<TReadDbContext>(
+            serviceCollection,
+            configuration,
+            migrationsHistorySchemaName: null);
+    }
+
+    /// <summary>
+    /// Registers the PostgreSQL read DbContext with a module-specific migrations history schema.
+    /// </summary>
+    /// <typeparam name="TReadDbContext">The read DbContext type.</typeparam>
+    /// <param name="serviceCollection">The service collection to register services into.</param>
+    /// <param name="configuration">The application configuration that contains the PostgreSQL connection string.</param>
+    /// <param name="migrationsHistorySchemaName">The PostgreSQL schema for the EF migrations history table.</param>
+    /// <returns>The same service collection after registration.</returns>
+    public static IServiceCollection AddPostgreSqlReadEfRepository<TReadDbContext>(
+        this IServiceCollection serviceCollection,
+        IConfiguration configuration,
+        string migrationsHistorySchemaName)
+        where TReadDbContext : ReadDbContext<TReadDbContext>
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(migrationsHistorySchemaName);
+
+        return AddPostgreSqlReadEfRepositoryCore<TReadDbContext>(
+            serviceCollection,
+            configuration,
+            migrationsHistorySchemaName);
+    }
+
+    private static IServiceCollection AddPostgreSqlReadEfRepositoryCore<TReadDbContext>(
+        IServiceCollection serviceCollection,
+        IConfiguration configuration,
+        string? migrationsHistorySchemaName)
+        where TReadDbContext : ReadDbContext<TReadDbContext>
+    {
         var connectionString = GetPostgreSqlConnectionString(configuration);
 
-        RegisterReadDbContext<TReadDbContext>(serviceCollection, connectionString);
+        RegisterReadDbContext<TReadDbContext>(
+            serviceCollection,
+            connectionString,
+            migrationsHistorySchemaName);
         serviceCollection.AddReadRepositoryImplementationsFromAssembly(typeof(TReadDbContext).Assembly);
 
         return serviceCollection;
@@ -88,26 +207,48 @@ public static class ServiceCollectionExtensions
 
     private static void RegisterWriteDbContext<TWriteDbContext>(
         IServiceCollection serviceCollection,
-        string connectionString)
+        string connectionString,
+        string? migrationsHistorySchemaName)
         where TWriteDbContext : WriteDbContext<TWriteDbContext>
     {
         serviceCollection.AddDbContext<TWriteDbContext>(options =>
         {
-            options.UseNpgsql(connectionString);
+            options.UseNpgsql(
+                connectionString,
+                npgsql => ConfigureMigrationsHistory(
+                    npgsql,
+                    migrationsHistorySchemaName));
             options.UseSnakeCaseNamingConvention();
         });
     }
 
     private static void RegisterReadDbContext<TReadDbContext>(
         IServiceCollection serviceCollection,
-        string connectionString)
+        string connectionString,
+        string? migrationsHistorySchemaName)
         where TReadDbContext : ReadDbContext<TReadDbContext>
     {
         serviceCollection.AddDbContext<TReadDbContext>(options =>
         {
-            options.UseNpgsql(connectionString);
+            options.UseNpgsql(
+                connectionString,
+                npgsql => ConfigureMigrationsHistory(
+                    npgsql,
+                    migrationsHistorySchemaName));
             options.UseSnakeCaseNamingConvention();
         });
+    }
+
+    private static void ConfigureMigrationsHistory(
+        NpgsqlDbContextOptionsBuilder options,
+        string? migrationsHistorySchemaName)
+    {
+        if (migrationsHistorySchemaName is not null)
+        {
+            options.MigrationsHistoryTable(
+                "__EFMigrationsHistory",
+                migrationsHistorySchemaName);
+        }
     }
 
     private static void RegisterWriteEfInfrastructure<TWriteDbContext>(
@@ -120,7 +261,9 @@ public static class ServiceCollectionExtensions
             ServiceDescriptor.Scoped<IInterceptor, AuditSaveChangesInterceptor>());
 
         serviceCollection.TryAddScoped<IAggregateTracker, AggregateTracker>();
-        serviceCollection.AddScoped<IUnitOfWork, EfUnitOfWork<TWriteDbContext>>();
+        serviceCollection.TryAddScoped<IUnitOfWork, EfUnitOfWork<TWriteDbContext>>();
+        serviceCollection.TryAddKeyedScoped<IUnitOfWork, EfUnitOfWork<TWriteDbContext>>(
+            typeof(TWriteDbContext));
     }
 
     private static string GetPostgreSqlConnectionString(IConfiguration configuration)

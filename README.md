@@ -26,6 +26,7 @@ The library is intentionally infrastructure-focused. Domain model design, comman
 - Base `EfRepository<TDbContext, TId, TAggregateRoot>` with async persistence operations integrated with `IAggregateTracker`.
 - `AggregateTracker` implementation for tracking touched aggregate roots independently of EF Core.
 - `EfUnitOfWork<TDbContext>` implementation for transaction boundaries.
+- Keyed `IUnitOfWork` registration by write `DbContext` type for modular applications.
 - Auditable entity configuration with `CreatedAt`, `UpdatedAt`, and `DeletedAt` shadow properties.
 - SaveChanges interceptor that updates audit values and converts deletes with `DeletedAt` into soft deletes.
 - Read repository helpers for page-based pagination, cursor pagination, dynamic sorting, and projection through `IReadModelMapper`.
@@ -92,9 +93,28 @@ public sealed class AppReadDbContext(
 }
 ```
 
+For a module that owns a PostgreSQL schema, pass that schema name so its EF migrations history is isolated from other DbContexts:
+
+```csharp
+services.AddPostgreSqlEfRepository<OrdersWriteDbContext, OrdersReadDbContext>(
+    configuration,
+    migrationsHistorySchemaName: "orders");
+```
+
+The context model should use the same schema for its tables, for example by overriding `UseContextNameAsSchema` when the derived context name resolves to the intended module schema.
+
 Use `AddPostgreSqlWriteEfRepository<TWriteDbContext>` when the application only needs write-side infrastructure, or `AddPostgreSqlReadEfRepository<TReadDbContext>` when it only needs read-side infrastructure.
 The registration methods scan DbContext assemblies and register concrete repository implementations as scoped services for non-generic application contracts derived from `IRepository<TId, TAggregateRoot>` or `IReadRepository<TId>`.
 Write repository implementations are discovered from the write DbContext assembly, and read repository implementations are discovered from the read DbContext assembly.
+
+Each write registration exposes its `IUnitOfWork` under the write `DbContext` type as a keyed service:
+
+```csharp
+var unitOfWork = serviceProvider.GetRequiredKeyedService<IUnitOfWork>(
+    typeof(AppWriteDbContext));
+```
+
+The first write registration also remains available as the non-keyed `IUnitOfWork` for backward compatibility with single-context applications. Modular infrastructure should resolve the keyed registration for the active module instead of relying on registration order.
 
 ## Usage
 

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -34,6 +35,10 @@ public sealed class ServiceCollectionExtensionsTests(PostgreSqlContainerFixture 
         scope.ServiceProvider.GetRequiredService<TestWriteDbContext>().Should().NotBeNull();
         scope.ServiceProvider.GetRequiredService<TestReadDbContext>().Should().NotBeNull();
         scope.ServiceProvider.GetRequiredService<IUnitOfWork>().Should().BeOfType<EfUnitOfWork<TestWriteDbContext>>();
+        scope.ServiceProvider
+            .GetRequiredKeyedService<IUnitOfWork>(typeof(TestWriteDbContext))
+            .Should()
+            .BeOfType<EfUnitOfWork<TestWriteDbContext>>();
         scope.ServiceProvider.GetRequiredService<IAggregateTracker>().Should().BeOfType<AggregateTracker>();
         scope.ServiceProvider.GetRequiredService<TimeProvider>().Should().Be(TimeProvider.System);
         scope.ServiceProvider.GetServices<IInterceptor>()
@@ -72,6 +77,10 @@ public sealed class ServiceCollectionExtensionsTests(PostgreSqlContainerFixture 
         scope.ServiceProvider.GetRequiredService<TestWriteDbContext>().Should().NotBeNull();
         scope.ServiceProvider.GetService<TestReadDbContext>().Should().BeNull();
         scope.ServiceProvider.GetRequiredService<IUnitOfWork>().Should().BeOfType<EfUnitOfWork<TestWriteDbContext>>();
+        scope.ServiceProvider
+            .GetRequiredKeyedService<IUnitOfWork>(typeof(TestWriteDbContext))
+            .Should()
+            .BeOfType<EfUnitOfWork<TestWriteDbContext>>();
         scope.ServiceProvider.GetRequiredService<IAggregateTracker>().Should().BeOfType<AggregateTracker>();
         AssertScopedRegistration<IAssemblyWriteRepository, AssemblyWriteRepository>(services);
         services.Should().NotContain(descriptor =>
@@ -108,6 +117,39 @@ public sealed class ServiceCollectionExtensionsTests(PostgreSqlContainerFixture 
         act.Should()
             .Throw<InvalidOperationException>()
             .WithMessage($"Connection string '{EfConstants.PostgreSqlConnectionStringName}' not found.");
+    }
+
+    [Fact(DisplayName = "AddPostgreSqlEfRepository configures module migrations history schema")]
+    public void AddPostgreSqlEfRepository_ConfiguresMigrationsHistorySchema()
+    {
+        var services = new ServiceCollection();
+
+        services.AddPostgreSqlEfRepository<TestWriteDbContext, TestReadDbContext>(
+            fixture.CreateConfiguration(),
+            "test_module");
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        var writeOptions = scope.ServiceProvider
+            .GetRequiredService<TestWriteDbContext>()
+            .GetService<IDbContextOptions>();
+        var readOptions = scope.ServiceProvider
+            .GetRequiredService<TestReadDbContext>()
+            .GetService<IDbContextOptions>();
+
+        writeOptions.Extensions
+            .OfType<RelationalOptionsExtension>()
+            .Single()
+            .MigrationsHistoryTableSchema
+            .Should()
+            .Be("test_module");
+        readOptions.Extensions
+            .OfType<RelationalOptionsExtension>()
+            .Single()
+            .MigrationsHistoryTableSchema
+            .Should()
+            .Be("test_module");
     }
 
     private static void AssertScopedRegistration<TService, TImplementation>(IServiceCollection services)
