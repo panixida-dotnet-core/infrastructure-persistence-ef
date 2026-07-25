@@ -16,10 +16,9 @@ public abstract class WriteDbContext<TDbContext>(
     IEnumerable<IInterceptor> interceptors) : DbContext(options)
     where TDbContext : WriteDbContext<TDbContext>
 {
-    /// <summary>
-    /// Gets a value indicating whether the concrete DbContext name should be used as the default database schema.
-    /// </summary>
-    protected virtual bool UseContextNameAsSchema { get; } = false;
+    internal static string SchemaName { get; } = typeof(TDbContext).ToSchemaName(
+        nameof(WriteDbContext<>),
+        nameof(DbContext));
 
     /// <summary>
     /// Gets a value indicating whether mapped table names should be converted to plural snake_case names.
@@ -40,11 +39,7 @@ public abstract class WriteDbContext<TDbContext>(
         base.OnModelCreating(modelBuilder);
 
         modelBuilder.UseHiLo();
-
-        if (UseContextNameAsSchema)
-        {
-            modelBuilder.HasDefaultSchema(GetSchemaName());
-        }
+        modelBuilder.HasDefaultSchema(SchemaName);
 
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(TDbContext).Assembly);
 
@@ -52,12 +47,5 @@ public abstract class WriteDbContext<TDbContext>(
         {
             modelBuilder.ApplyPluralTableNames();
         }
-    }
-
-    private static string GetSchemaName()
-    {
-        return typeof(TDbContext).ToSchemaName(
-            nameof(WriteDbContext<>),
-            nameof(DbContext));
     }
 }

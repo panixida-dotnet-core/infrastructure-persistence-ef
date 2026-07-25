@@ -21,8 +21,8 @@ The library is intentionally infrastructure-focused. Domain model design, comman
 ## Features
 
 - PostgreSQL registration extensions for write/read EF Core infrastructure and scoped repository implementation auto-registration.
-- `WriteDbContext<TDbContext>` with HiLo configuration, optional schema naming, assembly configuration scanning, and plural table names.
-- `ReadDbContext<TDbContext>` with no-tracking queries, automatic read model registration, optional schema naming, and migration exclusion for read models.
+- `WriteDbContext<TDbContext>` with HiLo configuration, context-derived schema naming, assembly configuration scanning, and plural table names.
+- `ReadDbContext<TDbContext>` with no-tracking queries, automatic read model registration, context-derived schema naming, and migration exclusion for read models.
 - Base `EfRepository<TDbContext, TId, TAggregateRoot>` with async persistence operations integrated with `IAggregateTracker`.
 - `AggregateTracker` implementation for tracking touched aggregate roots independently of EF Core.
 - `EfUnitOfWork<TDbContext>` implementation for transaction boundaries.
@@ -93,15 +93,14 @@ public sealed class AppReadDbContext(
 }
 ```
 
-For a module that owns a PostgreSQL schema, pass that schema name so its EF migrations history is isolated from other DbContexts:
+Each DbContext automatically owns a PostgreSQL schema derived from its type name. The `WriteDbContext`, `ReadDbContext`, and `DbContext` suffixes are removed before conversion to snake_case, so these contexts share the `orders` schema:
 
 ```csharp
 services.AddPostgreSqlEfRepository<OrdersWriteDbContext, OrdersReadDbContext>(
-    configuration,
-    migrationsHistorySchemaName: "orders");
+    configuration);
 ```
 
-The context model should use the same schema for its tables, for example by overriding `UseContextNameAsSchema` when the derived context name resolves to the intended module schema.
+The context tables and its `__EFMigrationsHistory` table use the same derived schema. DbContexts from different modules therefore keep both business tables and migration histories in separate schemas.
 
 Use `AddPostgreSqlWriteEfRepository<TWriteDbContext>` when the application only needs write-side infrastructure, or `AddPostgreSqlReadEfRepository<TReadDbContext>` when it only needs read-side infrastructure.
 The registration methods scan DbContext assemblies and register concrete repository implementations as scoped services for non-generic application contracts derived from `IRepository<TId, TAggregateRoot>` or `IReadRepository<TId>`.
@@ -114,7 +113,7 @@ var unitOfWork = serviceProvider.GetRequiredKeyedService<IUnitOfWork>(
     typeof(AppWriteDbContext));
 ```
 
-The first write registration also remains available as the non-keyed `IUnitOfWork` for backward compatibility with single-context applications. Modular infrastructure should resolve the keyed registration for the active module instead of relying on registration order.
+Persistence infrastructure does not register a non-keyed `IUnitOfWork`. A host-level mediator or messaging runtime can expose its own non-keyed proxy that resolves the keyed Unit of Work for the active module.
 
 ## Usage
 

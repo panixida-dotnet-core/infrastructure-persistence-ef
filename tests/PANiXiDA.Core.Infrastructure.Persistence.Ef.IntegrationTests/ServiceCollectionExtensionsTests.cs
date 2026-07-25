@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Configuration;
@@ -34,11 +35,13 @@ public sealed class ServiceCollectionExtensionsTests(PostgreSqlContainerFixture 
 
         scope.ServiceProvider.GetRequiredService<TestWriteDbContext>().Should().NotBeNull();
         scope.ServiceProvider.GetRequiredService<TestReadDbContext>().Should().NotBeNull();
-        scope.ServiceProvider.GetRequiredService<IUnitOfWork>().Should().BeOfType<EfUnitOfWork<TestWriteDbContext>>();
+        scope.ServiceProvider.GetService<IUnitOfWork>().Should().BeNull();
         scope.ServiceProvider
             .GetRequiredKeyedService<IUnitOfWork>(typeof(TestWriteDbContext))
             .Should()
             .BeOfType<EfUnitOfWork<TestWriteDbContext>>();
+        GetMigrationsHistorySchema<TestWriteDbContext>(scope.ServiceProvider).Should().Be("test");
+        GetMigrationsHistorySchema<TestReadDbContext>(scope.ServiceProvider).Should().Be("test");
         scope.ServiceProvider.GetRequiredService<IAggregateTracker>().Should().BeOfType<AggregateTracker>();
         scope.ServiceProvider.GetRequiredService<TimeProvider>().Should().Be(TimeProvider.System);
         scope.ServiceProvider.GetServices<IInterceptor>()
@@ -76,11 +79,12 @@ public sealed class ServiceCollectionExtensionsTests(PostgreSqlContainerFixture 
 
         scope.ServiceProvider.GetRequiredService<TestWriteDbContext>().Should().NotBeNull();
         scope.ServiceProvider.GetService<TestReadDbContext>().Should().BeNull();
-        scope.ServiceProvider.GetRequiredService<IUnitOfWork>().Should().BeOfType<EfUnitOfWork<TestWriteDbContext>>();
+        scope.ServiceProvider.GetService<IUnitOfWork>().Should().BeNull();
         scope.ServiceProvider
             .GetRequiredKeyedService<IUnitOfWork>(typeof(TestWriteDbContext))
             .Should()
             .BeOfType<EfUnitOfWork<TestWriteDbContext>>();
+        GetMigrationsHistorySchema<TestWriteDbContext>(scope.ServiceProvider).Should().Be("test");
         scope.ServiceProvider.GetRequiredService<IAggregateTracker>().Should().BeOfType<AggregateTracker>();
         AssertScopedRegistration<IAssemblyWriteRepository, AssemblyWriteRepository>(services);
         services.Should().NotContain(descriptor =>
@@ -100,6 +104,11 @@ public sealed class ServiceCollectionExtensionsTests(PostgreSqlContainerFixture 
         scope.ServiceProvider.GetRequiredService<TestReadDbContext>().Should().NotBeNull();
         scope.ServiceProvider.GetService<TestWriteDbContext>().Should().BeNull();
         scope.ServiceProvider.GetService<IUnitOfWork>().Should().BeNull();
+        scope.ServiceProvider
+            .GetKeyedService<IUnitOfWork>(typeof(TestReadDbContext))
+            .Should()
+            .BeNull();
+        GetMigrationsHistorySchema<TestReadDbContext>(scope.ServiceProvider).Should().Be("test");
         scope.ServiceProvider.GetService<IAggregateTracker>().Should().BeNull();
         AssertScopedRegistration<IAssemblyReadRepository, AssemblyReadRepository>(services);
         services.Should().NotContain(descriptor =>
@@ -119,37 +128,41 @@ public sealed class ServiceCollectionExtensionsTests(PostgreSqlContainerFixture 
             .WithMessage($"Connection string '{EfConstants.PostgreSqlConnectionStringName}' not found.");
     }
 
-    [Fact(DisplayName = "AddPostgreSqlEfRepository configures module migrations history schema")]
-    public void AddPostgreSqlEfRepository_ConfiguresMigrationsHistorySchema()
+    [Fact(DisplayName = "Write registrations derive different migrations history schemas from DbContext types")]
+    public void AddPostgreSqlWriteEfRepository_DerivesDifferentMigrationsHistorySchemas()
     {
-        var services = new ServiceCollection();
+        var testServices = new ServiceCollection();
+        var singularServices = new ServiceCollection();
 
-        services.AddPostgreSqlEfRepository<TestWriteDbContext, TestReadDbContext>(
-            fixture.CreateConfiguration(),
-            "test_module");
+        testServices.AddPostgreSqlWriteEfRepository<TestWriteDbContext>(
+            fixture.CreateConfiguration());
+        singularServices.AddPostgreSqlWriteEfRepository<SingularWriteDbContext>(
+            fixture.CreateConfiguration());
 
-        using var provider = services.BuildServiceProvider();
-        using var scope = provider.CreateScope();
+        using var testProvider = testServices.BuildServiceProvider();
+        using var testScope = testProvider.CreateScope();
+        using var singularProvider = singularServices.BuildServiceProvider();
+        using var singularScope = singularProvider.CreateScope();
 
-        var writeOptions = scope.ServiceProvider
-            .GetRequiredService<TestWriteDbContext>()
-            .GetService<IDbContextOptions>();
-        var readOptions = scope.ServiceProvider
-            .GetRequiredService<TestReadDbContext>()
-            .GetService<IDbContextOptions>();
+        GetMigrationsHistorySchema<TestWriteDbContext>(testScope.ServiceProvider)
+            .Should()
+            .Be("test");
+        GetMigrationsHistorySchema<SingularWriteDbContext>(singularScope.ServiceProvider)
+            .Should()
+            .Be("singular");
+    }
 
-        writeOptions.Extensions
+    private static string? GetMigrationsHistorySchema<TDbContext>(
+        IServiceProvider serviceProvider)
+        where TDbContext : DbContext
+    {
+        return serviceProvider
+            .GetRequiredService<TDbContext>()
+            .GetService<IDbContextOptions>()
+            .Extensions
             .OfType<RelationalOptionsExtension>()
             .Single()
-            .MigrationsHistoryTableSchema
-            .Should()
-            .Be("test_module");
-        readOptions.Extensions
-            .OfType<RelationalOptionsExtension>()
-            .Single()
-            .MigrationsHistoryTableSchema
-            .Should()
-            .Be("test_module");
+            .MigrationsHistoryTableSchema;
     }
 
     private static void AssertScopedRegistration<TService, TImplementation>(IServiceCollection services)

@@ -13,10 +13,9 @@ public abstract class ReadDbContext<TDbContext>(
     DbContextOptions<TDbContext> options) : DbContext(options)
     where TDbContext : ReadDbContext<TDbContext>
 {
-    /// <summary>
-    /// Gets a value indicating whether the concrete DbContext name should be used as the default database schema.
-    /// </summary>
-    protected virtual bool UseContextNameAsSchema { get; } = false;
+    internal static string SchemaName { get; } = typeof(TDbContext).ToSchemaName(
+        nameof(ReadDbContext<>),
+        nameof(DbContext));
 
     /// <summary>
     /// Gets a value indicating whether registered read models should be excluded from generated migrations.
@@ -36,22 +35,11 @@ public abstract class ReadDbContext<TDbContext>(
     {
         base.OnModelCreating(modelBuilder);
 
-        var schemaName = UseContextNameAsSchema
-            ? GetSchemaName()
-            : null;
-
         modelBuilder.RegisterReadDbModels(
             typeof(TDbContext).Assembly,
-            schemaName,
+            SchemaName,
             ExcludeReadModelsFromMigrations);
 
         modelBuilder.ConfigureAuditableReadDbModels();
-    }
-
-    private static string GetSchemaName()
-    {
-        return typeof(TDbContext).ToSchemaName(
-            nameof(ReadDbContext<>),
-            nameof(DbContext));
     }
 }

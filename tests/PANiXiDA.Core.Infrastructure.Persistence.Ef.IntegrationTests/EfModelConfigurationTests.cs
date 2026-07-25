@@ -23,6 +23,7 @@ public sealed class EfModelConfigurationTests(PostgreSqlContainerFixture fixture
         var entityType = GetDesignTimeEntityType(context, typeof(TestAggregateRoot));
 
         entityType.GetTableName().Should().Be("aggregates");
+        entityType.GetSchema().Should().Be("test");
         entityType.GetDeclaredQueryFilters().Should().NotBeEmpty();
         entityType.GetProperty(EfConstants.CreatedAt).IsNullable.Should().BeFalse();
         entityType.GetProperty(EfConstants.UpdatedAt).IsNullable.Should().BeFalse();
@@ -35,17 +36,6 @@ public sealed class EfModelConfigurationTests(PostgreSqlContainerFixture fixture
             .GetSequences()
             .Should()
             .Contain(sequence => sequence.Name == "EntityFrameworkHiLoSequence");
-    }
-
-    [Fact(DisplayName = "WriteDbContext can use context name as schema")]
-    public async Task WriteDbContext_CanUseContextNameAsSchema()
-    {
-        await using var context = await CreateWriteContextAsync<SchemaWriteDbContext>(
-            options => new SchemaWriteDbContext(options, []));
-
-        var entityType = GetDesignTimeEntityType(context, typeof(TestAggregateRoot));
-
-        entityType.GetSchema().Should().Be("schema");
     }
 
     [Fact(DisplayName = "WriteDbContext can keep singular table names")]
@@ -70,7 +60,7 @@ public sealed class EfModelConfigurationTests(PostgreSqlContainerFixture fixture
         entityType.GetDeclaredQueryFilters().Should().BeEmpty();
     }
 
-    [Fact(DisplayName = "ReadDbContext registers read models as no-tracking models excluded from migrations")]
+    [Fact(DisplayName = "ReadDbContext registers schema-scoped no-tracking models excluded from migrations")]
     public async Task ReadDbContext_RegistersReadModelsAsNoTrackingModelsExcludedFromMigrations()
     {
         await using var context = await CreateReadContextAsync<TestReadDbContext>(
@@ -80,19 +70,7 @@ public sealed class EfModelConfigurationTests(PostgreSqlContainerFixture fixture
 
         context.ChangeTracker.QueryTrackingBehavior.Should().Be(QueryTrackingBehavior.NoTracking);
         entityType.GetTableName().Should().Be("products");
-        entityType.GetSchema().Should().BeNull();
-        entityType.IsTableExcludedFromMigrations().Should().BeTrue();
-    }
-
-    [Fact(DisplayName = "ReadDbContext can use context name as schema")]
-    public async Task ReadDbContext_CanUseContextNameAsSchema()
-    {
-        await using var context = await CreateReadContextAsync<SchemaReadDbContext>(
-            options => new SchemaReadDbContext(options));
-
-        var entityType = GetDesignTimeEntityType(context, typeof(ProductReadDbModel));
-
-        entityType.GetSchema().Should().Be("schema");
+        entityType.GetSchema().Should().Be("test");
         entityType.IsTableExcludedFromMigrations().Should().BeTrue();
     }
 
@@ -104,19 +82,7 @@ public sealed class EfModelConfigurationTests(PostgreSqlContainerFixture fixture
 
         var entityType = GetDesignTimeEntityType(context, typeof(ProductReadDbModel));
 
-        entityType.GetSchema().Should().BeNull();
-        entityType.IsTableExcludedFromMigrations().Should().BeFalse();
-    }
-
-    [Fact(DisplayName = "ReadDbContext can include read models in migrations with schema")]
-    public async Task ReadDbContext_CanIncludeReadModelsInMigrationsWithSchema()
-    {
-        await using var context = await CreateReadContextAsync<SchemaIncludedReadDbContext>(
-            options => new SchemaIncludedReadDbContext(options));
-
-        var entityType = GetDesignTimeEntityType(context, typeof(ProductReadDbModel));
-
-        entityType.GetSchema().Should().Be("schema_included");
+        entityType.GetSchema().Should().Be("included");
         entityType.IsTableExcludedFromMigrations().Should().BeFalse();
     }
 
@@ -201,7 +167,7 @@ public sealed class EfModelConfigurationTests(PostgreSqlContainerFixture fixture
     {
         var modelBuilder = new ModelBuilder();
 
-        modelBuilder.RegisterReadDbModels(typeof(string).Assembly, null, true);
+        modelBuilder.RegisterReadDbModels(typeof(string).Assembly, "test", true);
 
         modelBuilder.Model.GetEntityTypes().Should().BeEmpty();
     }
