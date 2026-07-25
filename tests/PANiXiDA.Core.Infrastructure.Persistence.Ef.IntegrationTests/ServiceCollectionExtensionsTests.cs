@@ -131,8 +131,8 @@ public sealed class ServiceCollectionExtensionsTests(PostgreSqlContainerFixture 
             .WithMessage($"Connection string '{EfConstants.PostgreSqlConnectionStringName}' not found.");
     }
 
-    [Fact(DisplayName = "PostgreSQL registrations keep migrations history in each DbContext table schema")]
-    public void PostgreSqlRegistrations_KeepMigrationsHistoryInDbContextTableSchema()
+    [Fact(DisplayName = "Write registration scopes migrations history while read registration only scopes tables")]
+    public void PostgreSqlRegistrations_ScopeMigrationsHistoryOnlyForWriteDbContext()
     {
         var moduleServices = new ServiceCollection();
         var secondModuleServices = new ServiceCollection();
@@ -147,18 +147,18 @@ public sealed class ServiceCollectionExtensionsTests(PostgreSqlContainerFixture 
         using var secondModuleProvider = secondModuleServices.BuildServiceProvider();
         using var secondModuleScope = secondModuleProvider.CreateScope();
 
-        AssertModelAndMigrationsSchema<SchemaWriteDbContext, TestAggregateRoot>(
+        AssertWriteModelAndMigrationsSchema<SchemaWriteDbContext, TestAggregateRoot>(
             moduleScope.ServiceProvider,
             "schema");
-        AssertModelAndMigrationsSchema<SchemaReadDbContext, ProductReadDbModel>(
+        AssertReadModelSchema<SchemaReadDbContext, ProductReadDbModel>(
             moduleScope.ServiceProvider,
             "schema");
-        AssertModelAndMigrationsSchema<SchemaIncludedReadDbContext, ProductReadDbModel>(
+        AssertReadModelSchema<SchemaIncludedReadDbContext, ProductReadDbModel>(
             secondModuleScope.ServiceProvider,
             "schema_included");
     }
 
-    private static void AssertModelAndMigrationsSchema<TDbContext, TEntity>(
+    private static void AssertWriteModelAndMigrationsSchema<TDbContext, TEntity>(
         IServiceProvider serviceProvider,
         string expectedSchema)
         where TDbContext : DbContext
@@ -174,6 +174,24 @@ public sealed class ServiceCollectionExtensionsTests(PostgreSqlContainerFixture 
         GetMigrationsHistorySchema<TDbContext>(serviceProvider)
             .Should()
             .Be(expectedSchema);
+    }
+
+    private static void AssertReadModelSchema<TDbContext, TEntity>(
+        IServiceProvider serviceProvider,
+        string expectedSchema)
+        where TDbContext : DbContext
+    {
+        var context = serviceProvider.GetRequiredService<TDbContext>();
+
+        context.GetService<IDesignTimeModel>()
+            .Model
+            .FindEntityType(typeof(TEntity))!
+            .GetSchema()
+            .Should()
+            .Be(expectedSchema);
+        GetMigrationsHistorySchema<TDbContext>(serviceProvider)
+            .Should()
+            .BeNull();
     }
 
     private static string? GetMigrationsHistorySchema<TDbContext>(

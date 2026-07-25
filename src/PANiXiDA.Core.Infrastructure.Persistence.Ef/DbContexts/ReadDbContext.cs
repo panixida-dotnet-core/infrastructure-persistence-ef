@@ -28,16 +28,6 @@ public abstract class ReadDbContext<TDbContext>(
     {
         base.OnConfiguring(optionsBuilder);
 
-        if (UseContextNameAsSchema)
-        {
-            optionsBuilder.UseNpgsql(options =>
-            {
-                options.MigrationsHistoryTable(
-                    "__EFMigrationsHistory",
-                    GetSchemaName());
-            });
-        }
-
         optionsBuilder.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
     }
 

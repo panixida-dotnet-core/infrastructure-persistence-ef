@@ -93,7 +93,7 @@ public sealed class AppReadDbContext(
 }
 ```
 
-By default, a DbContext uses the provider's default schema for both its tables and `__EFMigrationsHistory`. Override `UseContextNameAsSchema` to place both in a schema derived from the context type name:
+By default, a DbContext uses the provider's default schema for its tables, and a write DbContext keeps `__EFMigrationsHistory` there as well. Override `UseContextNameAsSchema` to derive the table schema from the context type name. For a write DbContext, its migration history follows the same schema:
 
 ```csharp
 public sealed class OrdersWriteDbContext(
@@ -115,7 +115,7 @@ services.AddPostgreSqlEfRepository<OrdersWriteDbContext, OrdersReadDbContext>(
     configuration);
 ```
 
-The `WriteDbContext`, `ReadDbContext`, and `DbContext` suffixes are removed before conversion to snake_case, so both contexts above use the `orders` schema. Schema-enabled DbContexts from different modules therefore keep both business tables and migration histories in separate schemas.
+The `WriteDbContext`, `ReadDbContext`, and `DbContext` suffixes are removed before conversion to snake_case, so both contexts above use the `orders` schema. Only write DbContexts configure migration history; read DbContexts currently configure table mapping only and are not migration owners.
 
 Use `AddPostgreSqlWriteEfRepository<TWriteDbContext>` when the application only needs write-side infrastructure, or `AddPostgreSqlReadEfRepository<TReadDbContext>` when it only needs read-side infrastructure.
 The registration methods scan DbContext assemblies and register concrete repository implementations as scoped services for non-generic application contracts derived from `IRepository<TId, TAggregateRoot>` or `IReadRepository<TId>`.
