@@ -168,7 +168,7 @@ public sealed class OrderRepository(
 }
 ```
 
-`EfRepository` persists aggregate roots through `AddAsync`, `UpdateAsync`, and `DeleteAsync`, and tracks touched aggregate roots through `IAggregateTracker`. The built-in write registration adds the generic `AggregateTracker` implementation as scoped, but consumers can register their own tracker before calling the EF registration methods. When a unit-of-work transaction is active, repository saves participate in that transaction and `EfUnitOfWork` commits or rolls it back.
+`EfRepository` persists aggregate roots through `AddAsync`, `UpdateAsync`, and `DeleteAsync`, and tracks touched aggregate roots through `IAggregateTracker`. The built-in write registration adds the generic `AggregateTracker` implementation as scoped, but consumers can register their own tracker before calling the EF registration methods. When a unit-of-work transaction is active, repository saves participate in that transaction. `EfUnitOfWork` saves any remaining tracked changes immediately before committing, which allows transactional outbox records added after handler execution to join the same transaction.
 
 ### Read Models
 

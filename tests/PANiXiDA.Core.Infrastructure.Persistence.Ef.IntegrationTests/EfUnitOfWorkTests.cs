@@ -113,13 +113,47 @@ public sealed class EfUnitOfWorkTests(PostgreSqlContainerFixture fixture)
             Id = 1,
             Name = "Committed"
         });
-        await context.SaveChangesAsync(TestContext.Current.CancellationToken);
+
         await unitOfWork.CommitTransactionAsync(TestContext.Current.CancellationToken);
 
         unitOfWork.HasActiveTransaction.Should().BeFalse();
         var count = await CountEntitiesAsync(options);
 
         count.Should().Be(1);
+    }
+
+    [Fact(DisplayName = "CommitTransactionAsync releases a failed transaction when saving changes fails")]
+    public async Task CommitTransactionAsync_ReleasesFailedTransaction_WhenSavingChangesFails()
+    {
+        var options = await CreateInitializedOptionsAsync();
+
+        await using (var setupContext = new TransactionalDbContext(options))
+        {
+            setupContext.Entities.Add(new TransactionalEntity
+            {
+                Id = 1,
+                Name = "Existing"
+            });
+            await setupContext.SaveChangesAsync(
+                TestContext.Current.CancellationToken);
+        }
+
+        await using var context = new TransactionalDbContext(options);
+        var unitOfWork = new EfUnitOfWork<TransactionalDbContext>(context);
+        await unitOfWork.BeginTransactionAsync(
+            TestContext.Current.CancellationToken);
+        context.Entities.Add(new TransactionalEntity
+        {
+            Id = 1,
+            Name = "Duplicate"
+        });
+
+        var act = () => unitOfWork.CommitTransactionAsync(
+            TestContext.Current.CancellationToken);
+
+        await act.Should().ThrowAsync<DbUpdateException>();
+        unitOfWork.HasActiveTransaction.Should().BeFalse();
+        (await CountEntitiesAsync(options)).Should().Be(1);
     }
 
     [Fact(DisplayName = "RollbackTransactionAsync rolls back active transaction")]

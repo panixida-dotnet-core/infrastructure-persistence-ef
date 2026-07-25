@@ -74,6 +74,7 @@ public sealed class EfUnitOfWork<TDbContext>(TDbContext dbContext) : IUnitOfWork
 
         try
         {
+            await dbContext.SaveChangesAsync(cancellationToken);
             await currentTransaction.CommitAsync(cancellationToken);
         }
         finally
