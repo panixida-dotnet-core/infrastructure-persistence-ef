@@ -49,7 +49,7 @@ internal static class ModelBuilderExtensions
     public static void RegisterReadDbModels(
         this ModelBuilder modelBuilder,
         Assembly assembly,
-        string schemaName,
+        string? schemaName,
         bool excludeFromMigrations)
     {
         var readDbModelTypes = assembly
@@ -72,7 +72,7 @@ internal static class ModelBuilderExtensions
     private static void ConfigureReadDbModel(
         this ModelBuilder modelBuilder,
         Type readDbModelType,
-        string schemaName,
+        string? schemaName,
         bool excludeFromMigrations)
     {
         var entityBuilder = modelBuilder.Entity(readDbModelType);
@@ -82,11 +82,27 @@ internal static class ModelBuilderExtensions
 
         if (excludeFromMigrations)
         {
+            if (schemaName is null)
+            {
+                entityBuilder.ToTable(tableName, tableBuilder =>
+                {
+                    tableBuilder.ExcludeFromMigrations();
+                });
+
+                return;
+            }
+
             entityBuilder.ToTable(tableName, schemaName, tableBuilder =>
             {
                 tableBuilder.ExcludeFromMigrations();
             });
 
+            return;
+        }
+
+        if (schemaName is null)
+        {
+            entityBuilder.ToTable(tableName);
             return;
         }
 

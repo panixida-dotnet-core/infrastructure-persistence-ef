@@ -12,8 +12,6 @@ using PANiXiDA.Core.Infrastructure.Persistence.Ef.Interceptors;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Tracking;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Write;
 
-using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
-
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.DependencyInjection;
 
 /// <summary>
@@ -103,11 +101,7 @@ public static class ServiceCollectionExtensions
     {
         serviceCollection.AddDbContext<TWriteDbContext>(options =>
         {
-            options.UseNpgsql(
-                connectionString,
-                npgsql => ConfigureMigrationsHistory(
-                    npgsql,
-                    WriteDbContext<TWriteDbContext>.SchemaName));
+            options.UseNpgsql(connectionString);
             options.UseSnakeCaseNamingConvention();
         });
     }
@@ -119,22 +113,9 @@ public static class ServiceCollectionExtensions
     {
         serviceCollection.AddDbContext<TReadDbContext>(options =>
         {
-            options.UseNpgsql(
-                connectionString,
-                npgsql => ConfigureMigrationsHistory(
-                    npgsql,
-                    ReadDbContext<TReadDbContext>.SchemaName));
+            options.UseNpgsql(connectionString);
             options.UseSnakeCaseNamingConvention();
         });
-    }
-
-    private static void ConfigureMigrationsHistory(
-        NpgsqlDbContextOptionsBuilder options,
-        string migrationsHistorySchemaName)
-    {
-        options.MigrationsHistoryTable(
-            "__EFMigrationsHistory",
-            migrationsHistorySchemaName);
     }
 
     private static void RegisterWriteEfInfrastructure<TWriteDbContext>(

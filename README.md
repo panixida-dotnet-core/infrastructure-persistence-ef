@@ -21,8 +21,8 @@ The library is intentionally infrastructure-focused. Domain model design, comman
 ## Features
 
 - PostgreSQL registration extensions for write/read EF Core infrastructure and scoped repository implementation auto-registration.
-- `WriteDbContext<TDbContext>` with HiLo configuration, context-derived schema naming, assembly configuration scanning, and plural table names.
-- `ReadDbContext<TDbContext>` with no-tracking queries, automatic read model registration, context-derived schema naming, and migration exclusion for read models.
+- `WriteDbContext<TDbContext>` with HiLo configuration, optional context-derived schema naming, assembly configuration scanning, and plural table names.
+- `ReadDbContext<TDbContext>` with no-tracking queries, automatic read model registration, optional context-derived schema naming, and migration exclusion for read models.
 - Base `EfRepository<TDbContext, TId, TAggregateRoot>` with async persistence operations integrated with `IAggregateTracker`.
 - `AggregateTracker` implementation for tracking touched aggregate roots independently of EF Core.
 - `EfUnitOfWork<TDbContext>` implementation for transaction boundaries.
@@ -93,14 +93,29 @@ public sealed class AppReadDbContext(
 }
 ```
 
-Each DbContext automatically owns a PostgreSQL schema derived from its type name. The `WriteDbContext`, `ReadDbContext`, and `DbContext` suffixes are removed before conversion to snake_case, so these contexts share the `orders` schema:
+By default, a DbContext uses the provider's default schema for both its tables and `__EFMigrationsHistory`. Override `UseContextNameAsSchema` to place both in a schema derived from the context type name:
 
 ```csharp
+public sealed class OrdersWriteDbContext(
+    DbContextOptions<OrdersWriteDbContext> options,
+    IEnumerable<IInterceptor> interceptors)
+    : WriteDbContext<OrdersWriteDbContext>(options, interceptors)
+{
+    protected override bool UseContextNameAsSchema => true;
+}
+
+public sealed class OrdersReadDbContext(
+    DbContextOptions<OrdersReadDbContext> options)
+    : ReadDbContext<OrdersReadDbContext>(options)
+{
+    protected override bool UseContextNameAsSchema => true;
+}
+
 services.AddPostgreSqlEfRepository<OrdersWriteDbContext, OrdersReadDbContext>(
     configuration);
 ```
 
-The context tables and its `__EFMigrationsHistory` table use the same derived schema. DbContexts from different modules therefore keep both business tables and migration histories in separate schemas.
+The `WriteDbContext`, `ReadDbContext`, and `DbContext` suffixes are removed before conversion to snake_case, so both contexts above use the `orders` schema. Schema-enabled DbContexts from different modules therefore keep both business tables and migration histories in separate schemas.
 
 Use `AddPostgreSqlWriteEfRepository<TWriteDbContext>` when the application only needs write-side infrastructure, or `AddPostgreSqlReadEfRepository<TReadDbContext>` when it only needs read-side infrastructure.
 The registration methods scan DbContext assemblies and register concrete repository implementations as scoped services for non-generic application contracts derived from `IRepository<TId, TAggregateRoot>` or `IReadRepository<TId>`.
