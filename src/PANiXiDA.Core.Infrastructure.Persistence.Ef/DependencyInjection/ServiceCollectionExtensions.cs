@@ -35,8 +35,12 @@ public static class ServiceCollectionExtensions
     {
         var connectionString = GetPostgreSqlConnectionString(configuration);
 
-        RegisterWriteDbContext<TWriteDbContext>(serviceCollection, connectionString);
-        RegisterReadDbContext<TReadDbContext>(serviceCollection, connectionString);
+        RegisterWriteDbContext<TWriteDbContext>(
+            serviceCollection,
+            connectionString);
+        RegisterReadDbContext<TReadDbContext>(
+            serviceCollection,
+            connectionString);
 
         RegisterWriteEfInfrastructure<TWriteDbContext>(serviceCollection);
         serviceCollection.AddWriteRepositoryImplementationsFromAssembly(typeof(TWriteDbContext).Assembly);
@@ -59,7 +63,9 @@ public static class ServiceCollectionExtensions
     {
         var connectionString = GetPostgreSqlConnectionString(configuration);
 
-        RegisterWriteDbContext<TWriteDbContext>(serviceCollection, connectionString);
+        RegisterWriteDbContext<TWriteDbContext>(
+            serviceCollection,
+            connectionString);
         RegisterWriteEfInfrastructure<TWriteDbContext>(serviceCollection);
         serviceCollection.AddWriteRepositoryImplementationsFromAssembly(typeof(TWriteDbContext).Assembly);
 
@@ -80,7 +86,9 @@ public static class ServiceCollectionExtensions
     {
         var connectionString = GetPostgreSqlConnectionString(configuration);
 
-        RegisterReadDbContext<TReadDbContext>(serviceCollection, connectionString);
+        RegisterReadDbContext<TReadDbContext>(
+            serviceCollection,
+            connectionString);
         serviceCollection.AddReadRepositoryImplementationsFromAssembly(typeof(TReadDbContext).Assembly);
 
         return serviceCollection;
@@ -120,7 +128,8 @@ public static class ServiceCollectionExtensions
             ServiceDescriptor.Scoped<IInterceptor, AuditSaveChangesInterceptor>());
 
         serviceCollection.TryAddScoped<IAggregateTracker, AggregateTracker>();
-        serviceCollection.AddScoped<IUnitOfWork, EfUnitOfWork<TWriteDbContext>>();
+        serviceCollection.TryAddKeyedScoped<IUnitOfWork, EfUnitOfWork<TWriteDbContext>>(
+            typeof(TWriteDbContext));
     }
 
     private static string GetPostgreSqlConnectionString(IConfiguration configuration)

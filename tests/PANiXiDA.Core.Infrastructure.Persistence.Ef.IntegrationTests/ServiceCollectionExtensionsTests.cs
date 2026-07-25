@@ -1,4 +1,7 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -6,8 +9,10 @@ using PANiXiDA.Core.Application.Persistence;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Constants;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.DependencyInjection;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.DbContexts;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.Entities;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.Infrastructure;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Interceptors;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.ReadModels;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.Repositories.Implementations;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.Repositories.Interfaces;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Write;
@@ -33,7 +38,13 @@ public sealed class ServiceCollectionExtensionsTests(PostgreSqlContainerFixture 
 
         scope.ServiceProvider.GetRequiredService<TestWriteDbContext>().Should().NotBeNull();
         scope.ServiceProvider.GetRequiredService<TestReadDbContext>().Should().NotBeNull();
-        scope.ServiceProvider.GetRequiredService<IUnitOfWork>().Should().BeOfType<EfUnitOfWork<TestWriteDbContext>>();
+        scope.ServiceProvider.GetService<IUnitOfWork>().Should().BeNull();
+        scope.ServiceProvider
+            .GetRequiredKeyedService<IUnitOfWork>(typeof(TestWriteDbContext))
+            .Should()
+            .BeOfType<EfUnitOfWork<TestWriteDbContext>>();
+        GetMigrationsHistorySchema<TestWriteDbContext>(scope.ServiceProvider).Should().BeNull();
+        GetMigrationsHistorySchema<TestReadDbContext>(scope.ServiceProvider).Should().BeNull();
         scope.ServiceProvider.GetRequiredService<IAggregateTracker>().Should().BeOfType<AggregateTracker>();
         scope.ServiceProvider.GetRequiredService<TimeProvider>().Should().Be(TimeProvider.System);
         scope.ServiceProvider.GetServices<IInterceptor>()
@@ -71,7 +82,12 @@ public sealed class ServiceCollectionExtensionsTests(PostgreSqlContainerFixture 
 
         scope.ServiceProvider.GetRequiredService<TestWriteDbContext>().Should().NotBeNull();
         scope.ServiceProvider.GetService<TestReadDbContext>().Should().BeNull();
-        scope.ServiceProvider.GetRequiredService<IUnitOfWork>().Should().BeOfType<EfUnitOfWork<TestWriteDbContext>>();
+        scope.ServiceProvider.GetService<IUnitOfWork>().Should().BeNull();
+        scope.ServiceProvider
+            .GetRequiredKeyedService<IUnitOfWork>(typeof(TestWriteDbContext))
+            .Should()
+            .BeOfType<EfUnitOfWork<TestWriteDbContext>>();
+        GetMigrationsHistorySchema<TestWriteDbContext>(scope.ServiceProvider).Should().BeNull();
         scope.ServiceProvider.GetRequiredService<IAggregateTracker>().Should().BeOfType<AggregateTracker>();
         AssertScopedRegistration<IAssemblyWriteRepository, AssemblyWriteRepository>(services);
         services.Should().NotContain(descriptor =>
@@ -91,6 +107,11 @@ public sealed class ServiceCollectionExtensionsTests(PostgreSqlContainerFixture 
         scope.ServiceProvider.GetRequiredService<TestReadDbContext>().Should().NotBeNull();
         scope.ServiceProvider.GetService<TestWriteDbContext>().Should().BeNull();
         scope.ServiceProvider.GetService<IUnitOfWork>().Should().BeNull();
+        scope.ServiceProvider
+            .GetKeyedService<IUnitOfWork>(typeof(TestReadDbContext))
+            .Should()
+            .BeNull();
+        GetMigrationsHistorySchema<TestReadDbContext>(scope.ServiceProvider).Should().BeNull();
         scope.ServiceProvider.GetService<IAggregateTracker>().Should().BeNull();
         AssertScopedRegistration<IAssemblyReadRepository, AssemblyReadRepository>(services);
         services.Should().NotContain(descriptor =>
@@ -108,6 +129,82 @@ public sealed class ServiceCollectionExtensionsTests(PostgreSqlContainerFixture 
         act.Should()
             .Throw<InvalidOperationException>()
             .WithMessage($"Connection string '{EfConstants.PostgreSqlConnectionStringName}' not found.");
+    }
+
+    [Fact(DisplayName = "Write registration scopes migrations history while read registration only scopes tables")]
+    public void PostgreSqlRegistrations_ScopeMigrationsHistoryOnlyForWriteDbContext()
+    {
+        var moduleServices = new ServiceCollection();
+        var secondModuleServices = new ServiceCollection();
+
+        moduleServices.AddPostgreSqlEfRepository<SchemaWriteDbContext, SchemaReadDbContext>(
+            fixture.CreateConfiguration());
+        secondModuleServices.AddPostgreSqlReadEfRepository<SchemaIncludedReadDbContext>(
+            fixture.CreateConfiguration());
+
+        using var moduleProvider = moduleServices.BuildServiceProvider();
+        using var moduleScope = moduleProvider.CreateScope();
+        using var secondModuleProvider = secondModuleServices.BuildServiceProvider();
+        using var secondModuleScope = secondModuleProvider.CreateScope();
+
+        AssertWriteModelAndMigrationsSchema<SchemaWriteDbContext, TestAggregateRoot>(
+            moduleScope.ServiceProvider,
+            "schema");
+        AssertReadModelSchema<SchemaReadDbContext, ProductReadDbModel>(
+            moduleScope.ServiceProvider,
+            "schema");
+        AssertReadModelSchema<SchemaIncludedReadDbContext, ProductReadDbModel>(
+            secondModuleScope.ServiceProvider,
+            "schema_included");
+    }
+
+    private static void AssertWriteModelAndMigrationsSchema<TDbContext, TEntity>(
+        IServiceProvider serviceProvider,
+        string expectedSchema)
+        where TDbContext : DbContext
+    {
+        var context = serviceProvider.GetRequiredService<TDbContext>();
+
+        context.GetService<IDesignTimeModel>()
+            .Model
+            .FindEntityType(typeof(TEntity))!
+            .GetSchema()
+            .Should()
+            .Be(expectedSchema);
+        GetMigrationsHistorySchema<TDbContext>(serviceProvider)
+            .Should()
+            .Be(expectedSchema);
+    }
+
+    private static void AssertReadModelSchema<TDbContext, TEntity>(
+        IServiceProvider serviceProvider,
+        string expectedSchema)
+        where TDbContext : DbContext
+    {
+        var context = serviceProvider.GetRequiredService<TDbContext>();
+
+        context.GetService<IDesignTimeModel>()
+            .Model
+            .FindEntityType(typeof(TEntity))!
+            .GetSchema()
+            .Should()
+            .Be(expectedSchema);
+        GetMigrationsHistorySchema<TDbContext>(serviceProvider)
+            .Should()
+            .BeNull();
+    }
+
+    private static string? GetMigrationsHistorySchema<TDbContext>(
+        IServiceProvider serviceProvider)
+        where TDbContext : DbContext
+    {
+        return serviceProvider
+            .GetRequiredService<TDbContext>()
+            .GetService<IDbContextOptions>()
+            .Extensions
+            .OfType<RelationalOptionsExtension>()
+            .Single()
+            .MigrationsHistoryTableSchema;
     }
 
     private static void AssertScopedRegistration<TService, TImplementation>(IServiceCollection services)

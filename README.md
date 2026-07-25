@@ -21,11 +21,12 @@ The library is intentionally infrastructure-focused. Domain model design, comman
 ## Features
 
 - PostgreSQL registration extensions for write/read EF Core infrastructure and scoped repository implementation auto-registration.
-- `WriteDbContext<TDbContext>` with HiLo configuration, optional schema naming, assembly configuration scanning, and plural table names.
-- `ReadDbContext<TDbContext>` with no-tracking queries, automatic read model registration, optional schema naming, and migration exclusion for read models.
+- `WriteDbContext<TDbContext>` with HiLo configuration, optional context-derived schema naming, assembly configuration scanning, and plural table names.
+- `ReadDbContext<TDbContext>` with no-tracking queries, automatic read model registration, optional context-derived schema naming, and migration exclusion for read models.
 - Base `EfRepository<TDbContext, TId, TAggregateRoot>` with async persistence operations integrated with `IAggregateTracker`.
 - `AggregateTracker` implementation for tracking touched aggregate roots independently of EF Core.
 - `EfUnitOfWork<TDbContext>` implementation for transaction boundaries.
+- Keyed `IUnitOfWork` registration by write `DbContext` type for modular applications.
 - Auditable entity configuration with `CreatedAt`, `UpdatedAt`, and `DeletedAt` shadow properties.
 - SaveChanges interceptor that updates audit values and converts deletes with `DeletedAt` into soft deletes.
 - Read repository helpers for page-based pagination, cursor pagination, dynamic sorting, and projection through `IReadModelMapper`.
@@ -92,9 +93,42 @@ public sealed class AppReadDbContext(
 }
 ```
 
+By default, a DbContext uses the provider's default schema for its tables, and a write DbContext keeps `__EFMigrationsHistory` there as well. Override `UseContextNameAsSchema` to derive the table schema from the context type name. For a write DbContext, its migration history follows the same schema:
+
+```csharp
+public sealed class OrdersWriteDbContext(
+    DbContextOptions<OrdersWriteDbContext> options,
+    IEnumerable<IInterceptor> interceptors)
+    : WriteDbContext<OrdersWriteDbContext>(options, interceptors)
+{
+    protected override bool UseContextNameAsSchema => true;
+}
+
+public sealed class OrdersReadDbContext(
+    DbContextOptions<OrdersReadDbContext> options)
+    : ReadDbContext<OrdersReadDbContext>(options)
+{
+    protected override bool UseContextNameAsSchema => true;
+}
+
+services.AddPostgreSqlEfRepository<OrdersWriteDbContext, OrdersReadDbContext>(
+    configuration);
+```
+
+The `WriteDbContext`, `ReadDbContext`, and `DbContext` suffixes are removed before conversion to snake_case, so both contexts above use the `orders` schema. Only write DbContexts configure migration history; read DbContexts currently configure table mapping only and are not migration owners.
+
 Use `AddPostgreSqlWriteEfRepository<TWriteDbContext>` when the application only needs write-side infrastructure, or `AddPostgreSqlReadEfRepository<TReadDbContext>` when it only needs read-side infrastructure.
 The registration methods scan DbContext assemblies and register concrete repository implementations as scoped services for non-generic application contracts derived from `IRepository<TId, TAggregateRoot>` or `IReadRepository<TId>`.
 Write repository implementations are discovered from the write DbContext assembly, and read repository implementations are discovered from the read DbContext assembly.
+
+Each write registration exposes its `IUnitOfWork` under the write `DbContext` type as a keyed service:
+
+```csharp
+var unitOfWork = serviceProvider.GetRequiredKeyedService<IUnitOfWork>(
+    typeof(AppWriteDbContext));
+```
+
+Persistence infrastructure does not register a non-keyed `IUnitOfWork`. A host-level mediator or messaging runtime can expose its own non-keyed proxy that resolves the keyed Unit of Work for the active module.
 
 ## Usage
 

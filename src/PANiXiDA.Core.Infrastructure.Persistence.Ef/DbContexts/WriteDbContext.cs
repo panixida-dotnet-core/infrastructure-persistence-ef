@@ -31,6 +31,16 @@ public abstract class WriteDbContext<TDbContext>(
     {
         base.OnConfiguring(optionsBuilder);
 
+        if (UseContextNameAsSchema)
+        {
+            optionsBuilder.UseNpgsql(options =>
+            {
+                options.MigrationsHistoryTable(
+                    "__EFMigrationsHistory",
+                    GetSchemaName());
+            });
+        }
+
         optionsBuilder.AddInterceptors(interceptors);
     }
 
