@@ -3,10 +3,10 @@ using PANiXiDA.Core.Infrastructure.Persistence.Ef.UnitTests.Repositories.Entitie
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.UnitTests.Repositories.Implementations;
 
-internal sealed class DirectWriteRepository : IRepository<int, TestAggregateRoot>
+internal sealed class DirectWriteRepository : IRepository<TestAggregateRootId, TestAggregateRoot>
 {
     public Task<TestAggregateRoot?> GetByIdAsync(
-        int id,
+        TestAggregateRootId id,
         CancellationToken cancellationToken)
     {
         return Task.FromResult<TestAggregateRoot?>(null);

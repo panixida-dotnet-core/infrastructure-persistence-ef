@@ -22,7 +22,7 @@ public sealed class RepositoryRegistrationExtensionsTests
         result.Should().BeSameAs(services);
         AssertScopedRegistration<IWriteRepositoryContract, WriteRepository>(services);
         services.Should().NotContain(descriptor =>
-            descriptor.ServiceType == typeof(IRepository<int, TestAggregateRoot>)
+            descriptor.ServiceType == typeof(IRepository<TestAggregateRootId, TestAggregateRoot>)
                 || descriptor.ServiceType == typeof(IReadRepository<int>)
                 || descriptor.ServiceType == typeof(IReadRepositoryContract)
                 || descriptor.ServiceType == typeof(IAbstractReadRepositoryContract)
@@ -46,7 +46,7 @@ public sealed class RepositoryRegistrationExtensionsTests
         result.Should().BeSameAs(services);
         AssertScopedRegistration<IReadRepositoryContract, ReadRepository>(services);
         services.Should().NotContain(descriptor =>
-            descriptor.ServiceType == typeof(IRepository<int, TestAggregateRoot>)
+            descriptor.ServiceType == typeof(IRepository<TestAggregateRootId, TestAggregateRoot>)
                 || descriptor.ServiceType == typeof(IReadRepository<int>)
                 || descriptor.ServiceType == typeof(IWriteRepositoryContract)
                 || descriptor.ServiceType == typeof(IAbstractReadRepositoryContract)
