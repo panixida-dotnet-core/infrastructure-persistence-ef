@@ -3,6 +3,7 @@
 using PANiXiDA.Core.Application.Persistence;
 using PANiXiDA.Core.Domain.Abstractions;
 using PANiXiDA.Core.Domain.AggregateRoots;
+using PANiXiDA.Core.Domain.Identifiers;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.DbContexts;
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Write;
@@ -19,7 +20,7 @@ public abstract class EfRepository<TDbContext, TId, TAggregateRoot>(
     TDbContext dbContext,
     IAggregateTracker aggregateTracker) : IRepository<TId, TAggregateRoot>
     where TDbContext : WriteDbContext<TDbContext>
-    where TId : struct
+    where TId : struct, IStronglyTypedId
     where TAggregateRoot : AggregateRoot<TId>
 {
     /// <summary>

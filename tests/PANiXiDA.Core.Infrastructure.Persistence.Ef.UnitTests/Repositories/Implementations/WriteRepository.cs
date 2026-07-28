@@ -6,7 +6,7 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.UnitTests.Repositories.Imp
 internal sealed class WriteRepository : IWriteRepositoryContract
 {
     public Task<TestAggregateRoot?> GetByIdAsync(
-        int id,
+        TestAggregateRootId id,
         CancellationToken cancellationToken)
     {
         return Task.FromResult<TestAggregateRoot?>(null);

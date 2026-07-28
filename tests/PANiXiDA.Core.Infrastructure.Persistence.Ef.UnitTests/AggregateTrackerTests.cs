@@ -9,7 +9,7 @@ public sealed class AggregateTrackerTests
     public void Track_TracksAggregateRootsOnce_ByReference()
     {
         var tracker = new AggregateTracker();
-        var aggregateRoot = new TestAggregateRoot(1);
+        var aggregateRoot = new TestAggregateRoot(TestAggregateRootId.New());
 
         tracker.Track(aggregateRoot);
         tracker.Track(aggregateRoot);
@@ -21,8 +21,8 @@ public sealed class AggregateTrackerTests
     public void GetAll_ReturnsSnapshotOfTrackedAggregateRoots()
     {
         var tracker = new AggregateTracker();
-        var firstAggregateRoot = new TestAggregateRoot(1);
-        var secondAggregateRoot = new TestAggregateRoot(1);
+        var firstAggregateRoot = new TestAggregateRoot(TestAggregateRootId.New());
+        var secondAggregateRoot = new TestAggregateRoot(TestAggregateRootId.New());
 
         tracker.Track(firstAggregateRoot);
         var trackedAggregateRoots = tracker.GetAll();
@@ -36,7 +36,7 @@ public sealed class AggregateTrackerTests
     public void Clear_RemovesTrackedAggregateRoots()
     {
         var tracker = new AggregateTracker();
-        var aggregateRoot = new TestAggregateRoot(1);
+        var aggregateRoot = new TestAggregateRoot(TestAggregateRootId.New());
 
         tracker.Track(aggregateRoot);
         tracker.Clear();

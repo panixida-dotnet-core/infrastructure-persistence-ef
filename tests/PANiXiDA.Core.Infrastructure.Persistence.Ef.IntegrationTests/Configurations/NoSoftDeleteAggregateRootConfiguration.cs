@@ -10,6 +10,8 @@ internal sealed class NoSoftDeleteAggregateRootConfiguration
     protected override void ConfigureEntity(EntityTypeBuilder<NoSoftDeleteAggregateRoot> builder)
     {
         builder.HasKey(item => item.Id);
+        builder.Property(item => item.Id)
+            .HasConversion(id => id.Value, value => new NoSoftDeleteAggregateRootId(value));
     }
 
     protected override bool IsSoftDeleteEnabled()

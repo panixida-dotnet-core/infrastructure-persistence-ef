@@ -20,7 +20,7 @@ public sealed class AuditSaveChangesInterceptorTests(PostgreSqlContainerFixture 
     {
         var now = new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero);
         await using var context = await CreateContextAsync(now);
-        var aggregateRoot = new TestAggregateRoot(1)
+        var aggregateRoot = new TestAggregateRoot(TestAggregateRootId.New())
         {
             Name = "Created"
         };
@@ -40,7 +40,7 @@ public sealed class AuditSaveChangesInterceptorTests(PostgreSqlContainerFixture 
         var now = new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero);
         await using var context = await fixture.CreateInitializedDbContextAsync<TestWriteDbContext>(
             options => new TestWriteDbContext(options, []));
-        var aggregateRoot = new TestAggregateRoot(1)
+        var aggregateRoot = new TestAggregateRoot(TestAggregateRootId.New())
         {
             Name = "Created"
         };
@@ -64,7 +64,7 @@ public sealed class AuditSaveChangesInterceptorTests(PostgreSqlContainerFixture 
 
         await using (var createContext = await CreateContextAsync(createdAt, databaseName))
         {
-            createContext.Aggregates.Add(new TestAggregateRoot(1)
+            createContext.Aggregates.Add(new TestAggregateRoot(TestAggregateRootId.New())
             {
                 Name = "Created"
             });
@@ -125,7 +125,7 @@ public sealed class AuditSaveChangesInterceptorTests(PostgreSqlContainerFixture 
 
         await using (var createContext = await CreateContextAsync(createdAt, databaseName))
         {
-            createContext.Aggregates.Add(new TestAggregateRoot(1)
+            createContext.Aggregates.Add(new TestAggregateRoot(TestAggregateRootId.New())
             {
                 Name = "Created"
             });
@@ -153,7 +153,7 @@ public sealed class AuditSaveChangesInterceptorTests(PostgreSqlContainerFixture 
 
         await using (var createContext = await CreateContextAsync(createdAt, databaseName))
         {
-            createContext.Aggregates.Add(new TestAggregateRoot(1)
+            createContext.Aggregates.Add(new TestAggregateRoot(TestAggregateRootId.New())
             {
                 Name = "Created"
             });

@@ -3,6 +3,6 @@ using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.Entities;
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.Repositories.Interfaces;
 
-internal interface IAssemblyWriteRepository : IRepository<int, TestAggregateRoot>
+internal interface IAssemblyWriteRepository : IRepository<TestAggregateRootId, TestAggregateRoot>
 {
 }

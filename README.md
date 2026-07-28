@@ -140,9 +140,12 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using PANiXiDA.Core.Application.Persistence;
 using PANiXiDA.Core.Domain.Abstractions;
 using PANiXiDA.Core.Domain.AggregateRoots;
+using PANiXiDA.Core.Domain.Identifiers;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Write;
 
-public sealed class Order(Guid id) : AggregateRoot<Guid>(id)
+public readonly record struct OrderId(Guid Value) : IStronglyTypedId;
+
+public sealed class Order(OrderId id) : AggregateRoot<OrderId>(id)
 {
     public string Number { get; private set; } = string.Empty;
 }
@@ -152,18 +155,20 @@ public sealed class OrderConfiguration : AuditableEntityConfiguration<Order>
     protected override void ConfigureEntity(EntityTypeBuilder<Order> builder)
     {
         builder.HasKey(order => order.Id);
+        builder.Property(order => order.Id)
+            .HasConversion(id => id.Value, value => new OrderId(value));
         builder.Property(order => order.Number).HasMaxLength(64).IsRequired();
     }
 }
 
-public interface IOrderRepository : IRepository<Guid, Order>
+public interface IOrderRepository : IRepository<OrderId, Order>
 {
 }
 
 public sealed class OrderRepository(
     AppWriteDbContext dbContext,
     IAggregateTracker aggregateTracker)
-    : EfRepository<AppWriteDbContext, Guid, Order>(dbContext, aggregateTracker), IOrderRepository
+    : EfRepository<AppWriteDbContext, OrderId, Order>(dbContext, aggregateTracker), IOrderRepository
 {
 }
 ```

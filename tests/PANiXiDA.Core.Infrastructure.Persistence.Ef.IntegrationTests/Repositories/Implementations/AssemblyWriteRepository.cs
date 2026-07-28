@@ -6,7 +6,7 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.Repositor
 internal sealed class AssemblyWriteRepository : IAssemblyWriteRepository
 {
     public Task<TestAggregateRoot?> GetByIdAsync(
-        int id,
+        TestAggregateRootId id,
         CancellationToken cancellationToken)
     {
         return Task.FromResult<TestAggregateRoot?>(null);
