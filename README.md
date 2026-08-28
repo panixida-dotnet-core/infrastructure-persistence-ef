@@ -326,6 +326,12 @@ dotnet test --configuration Release
 dotnet pack --configuration Release
 ```
 
+### Continuous integration
+
+Every pull request and push to `main` runs formatting, tests, and mandatory
+SonarQube analysis. Publishing from `main` starts only after the SonarQube
+Quality Gate succeeds.
+
 ## Tooling and Conventions
 
 This repository uses:
