@@ -18,6 +18,7 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Read;
 /// <typeparam name="TId">The read model identifier type.</typeparam>
 /// <typeparam name="TReadDbModel">The database read model type.</typeparam>
 /// <param name="dbContext">The read DbContext used by the repository.</param>
+#pragma warning disable S2436 // Each type parameter defines a distinct EF repository responsibility.
 public abstract class EfReadRepository
     <TDbContext, TId, TReadDbModel>(TDbContext dbContext) : IReadRepository<TId>
     where TDbContext : ReadDbContext<TDbContext>
@@ -206,3 +207,4 @@ public abstract class EfReadRepository
             hasPreviousPage);
     }
 }
+#pragma warning restore S2436

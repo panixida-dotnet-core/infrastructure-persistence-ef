@@ -16,6 +16,7 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Write;
 /// <typeparam name="TAggregateRoot">The aggregate root type.</typeparam>
 /// <param name="dbContext">The DbContext used by the repository.</param>
 /// <param name="aggregateTracker">The tracker used to collect touched aggregate roots.</param>
+#pragma warning disable S2436 // The repository must bind its DbContext, identifier, and aggregate root types.
 public abstract class EfRepository<TDbContext, TId, TAggregateRoot>(
     TDbContext dbContext,
     IAggregateTracker aggregateTracker) : IRepository<TId, TAggregateRoot>
@@ -72,3 +73,4 @@ public abstract class EfRepository<TDbContext, TId, TAggregateRoot>(
         return dbContext.SaveChangesAsync(cancellationToken);
     }
 }
+#pragma warning restore S2436
