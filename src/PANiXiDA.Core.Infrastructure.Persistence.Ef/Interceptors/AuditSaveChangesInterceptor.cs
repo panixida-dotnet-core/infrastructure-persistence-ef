@@ -67,25 +67,25 @@ internal sealed class AuditSaveChangesInterceptor(TimeProvider timeProvider)
     {
         var auditProperties = GetAuditProperties(entry);
 
-        switch (entry.State)
+        if (entry.State == EntityState.Added)
         {
-            case EntityState.Added:
-                UpdateAddedEntry(entry, auditProperties, now);
-                break;
+            UpdateAddedEntry(entry, auditProperties, now);
+        }
 
-            case EntityState.Modified:
-                UpdateModifiedEntry(entry, auditProperties, now);
-                break;
+        if (entry.State == EntityState.Modified)
+        {
+            UpdateModifiedEntry(entry, auditProperties, now);
+        }
 
-            case EntityState.Deleted:
-                UpdateDeletedEntry(entry, auditProperties, now);
-                break;
+        if (entry.State == EntityState.Deleted)
+        {
+            UpdateDeletedEntry(entry, auditProperties, now);
         }
     }
 
     private static bool ShouldSkip(EntityEntry entry)
     {
-        return entry.State == EntityState.Detached || entry.State == EntityState.Unchanged;
+        return entry.State == EntityState.Unchanged;
     }
 
     private static AuditProperties GetAuditProperties(EntityEntry entry)

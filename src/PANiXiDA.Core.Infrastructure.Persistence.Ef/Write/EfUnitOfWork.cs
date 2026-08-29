@@ -1,6 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
+using System.Runtime.ExceptionServices;
+
 using PANiXiDA.Core.Application.Persistence;
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Write;
@@ -35,6 +37,7 @@ public sealed class EfUnitOfWork<TDbContext>(TDbContext dbContext) : IUnitOfWork
 
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         currentTransaction = transaction;
+        Exception? exception = null;
 
         try
         {
@@ -42,14 +45,17 @@ public sealed class EfUnitOfWork<TDbContext>(TDbContext dbContext) : IUnitOfWork
             await dbContext.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }
-        catch
+        catch (Exception caughtException)
+        {
+            exception = caughtException;
+        }
+
+        currentTransaction = null;
+
+        if (exception is not null)
         {
             await transaction.RollbackAsync(cancellationToken);
-            throw;
-        }
-        finally
-        {
-            currentTransaction = null;
+            ExceptionDispatchInfo.Throw(exception);
         }
     }
 
@@ -72,14 +78,12 @@ public sealed class EfUnitOfWork<TDbContext>(TDbContext dbContext) : IUnitOfWork
             return;
         }
 
-        try
+        var transaction = currentTransaction;
+        currentTransaction = null;
+
+        await using (transaction)
         {
-            await currentTransaction.CommitAsync(cancellationToken);
-        }
-        finally
-        {
-            await currentTransaction.DisposeAsync();
-            currentTransaction = null;
+            await transaction.CommitAsync(cancellationToken);
         }
     }
 
@@ -91,14 +95,12 @@ public sealed class EfUnitOfWork<TDbContext>(TDbContext dbContext) : IUnitOfWork
             return;
         }
 
-        try
+        var transaction = currentTransaction;
+        currentTransaction = null;
+
+        await using (transaction)
         {
-            await currentTransaction.RollbackAsync(cancellationToken);
-        }
-        finally
-        {
-            await currentTransaction.DisposeAsync();
-            currentTransaction = null;
+            await transaction.RollbackAsync(cancellationToken);
         }
     }
 
