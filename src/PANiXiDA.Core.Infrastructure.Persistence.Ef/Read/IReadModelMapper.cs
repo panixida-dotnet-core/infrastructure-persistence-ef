@@ -8,7 +8,6 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Read;
 /// <typeparam name="TId">The database read model identifier type.</typeparam>
 /// <typeparam name="TDbReadModel">The database read model type.</typeparam>
 /// <typeparam name="TReadModel">The projected read model type.</typeparam>
-#pragma warning disable S2436 // The mapper contract must bind the identifier, database model, and read model.
 public interface IReadModelMapper<TId, TDbReadModel, TReadModel>
     where TId : struct
     where TDbReadModel : ReadDbModel<TId>
@@ -20,4 +19,3 @@ public interface IReadModelMapper<TId, TDbReadModel, TReadModel>
     /// <returns>The projected read model query.</returns>
     static abstract IQueryable<TReadModel> ProjectTo(IQueryable<TDbReadModel> query);
 }
-#pragma warning restore S2436
