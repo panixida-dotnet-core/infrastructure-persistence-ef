@@ -36,14 +36,14 @@ internal static class ModelBuilderExtensions
 
     private static bool ShouldSkipOwnedEntityType(IMutableEntityType entityType)
     {
-        var ownership = entityType.FindOwnership()!;
-        if (ownership.IsUnique)
+        var ownership = entityType.FindOwnership();
+        if (ownership?.IsUnique is not false)
         {
             return true;
         }
 
-        var conventionEntityType = (IConventionEntityType)entityType;
-        return conventionEntityType.GetTableNameConfigurationSource() == ConfigurationSource.Explicit;
+        return entityType is IConventionEntityType conventionEntityType
+            && conventionEntityType.GetTableNameConfigurationSource() == ConfigurationSource.Explicit;
     }
 
     public static void RegisterReadDbModels(

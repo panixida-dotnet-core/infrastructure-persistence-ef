@@ -215,6 +215,37 @@ public sealed class AuditSaveChangesInterceptorTests(PostgreSqlContainerFixture 
         act.Should().NotThrow();
     }
 
+    [Fact(DisplayName = "AuditSaveChangesInterceptor skips detached entries")]
+    public async Task AuditSaveChangesInterceptor_SkipsDetachedEntries()
+    {
+        await using var context = await fixture.CreateInitializedDbContextAsync<TestWriteDbContext>(
+            options => new TestWriteDbContext(options, []));
+        var aggregateRoot = new TestAggregateRoot(TestAggregateRootId.New())
+        {
+            Name = "Detached"
+        };
+        var entry = context.Entry(aggregateRoot);
+        var shouldSkipMethod = typeof(AuditSaveChangesInterceptor).GetMethod(
+            "ShouldSkip",
+            BindingFlags.Static | BindingFlags.NonPublic);
+        var updateEntryMethod = typeof(AuditSaveChangesInterceptor).GetMethod(
+            "UpdateEntry",
+            BindingFlags.Static | BindingFlags.NonPublic);
+        if (shouldSkipMethod is null || updateEntryMethod is null)
+        {
+            throw new MissingMethodException(
+                typeof(AuditSaveChangesInterceptor).FullName,
+                "ShouldSkip or UpdateEntry");
+        }
+
+        var shouldSkipResult = shouldSkipMethod.Invoke(null, [entry]);
+        var act = () => updateEntryMethod.Invoke(null, [entry, DateTime.UtcNow]);
+
+        shouldSkipResult.Should().Be(true);
+        act.Should().NotThrow();
+        entry.State.Should().Be(EntityState.Detached);
+    }
+
     private async Task<TestWriteDbContext> CreateContextAsync(
         DateTimeOffset utcNow,
         string? databaseName = null)
