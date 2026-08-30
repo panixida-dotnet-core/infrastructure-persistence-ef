@@ -50,7 +50,7 @@ public sealed class EfUnitOfWork<TDbContext>(TDbContext dbContext) : IUnitOfWork
             exception = caughtException;
         }
 
-        currentTransaction = null;
+        TakeCurrentTransaction();
 
         if (exception is not null)
         {
@@ -73,46 +73,51 @@ public sealed class EfUnitOfWork<TDbContext>(TDbContext dbContext) : IUnitOfWork
     /// <inheritdoc />
     public async Task CommitTransactionAsync(CancellationToken cancellationToken)
     {
-        if (currentTransaction == null)
-        {
-            return;
-        }
-
-        var transaction = currentTransaction;
-        currentTransaction = null;
-
-        await using (transaction)
-        {
-            await transaction.CommitAsync(cancellationToken);
-        }
+        await CompleteTransactionAsync(
+            static (transaction, token) => transaction.CommitAsync(token),
+            cancellationToken);
     }
 
     /// <inheritdoc />
     public async Task RollbackTransactionAsync(CancellationToken cancellationToken)
     {
-        if (currentTransaction == null)
+        await CompleteTransactionAsync(
+            static (transaction, token) => transaction.RollbackAsync(token),
+            cancellationToken);
+    }
+
+    private async Task CompleteTransactionAsync(
+        Func<IDbContextTransaction, CancellationToken, Task> completeTransactionAsync,
+        CancellationToken cancellationToken)
+    {
+        var transaction = TakeCurrentTransaction();
+        if (transaction == null)
         {
             return;
         }
 
-        var transaction = currentTransaction;
-        currentTransaction = null;
-
         await using (transaction)
         {
-            await transaction.RollbackAsync(cancellationToken);
+            await completeTransactionAsync(transaction, cancellationToken);
         }
     }
 
     /// <inheritdoc />
     public async ValueTask DisposeTransactionAsync()
     {
-        if (currentTransaction == null)
+        var transaction = TakeCurrentTransaction();
+        if (transaction == null)
         {
             return;
         }
 
-        await currentTransaction.DisposeAsync();
+        await transaction.DisposeAsync();
+    }
+
+    private IDbContextTransaction? TakeCurrentTransaction()
+    {
+        var transaction = currentTransaction;
         currentTransaction = null;
+        return transaction;
     }
 }
