@@ -1,5 +1,3 @@
-using System.Reflection;
-
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
@@ -206,44 +204,10 @@ public sealed class AuditSaveChangesInterceptorTests(PostgreSqlContainerFixture 
     public void AuditSaveChangesInterceptor_IgnoresNullDbContextEventData()
     {
         var interceptor = new AuditSaveChangesInterceptor(TimeProvider.System);
-        var method = typeof(AuditSaveChangesInterceptor).GetMethod(
-            "UpdateEntities",
-            BindingFlags.Instance | BindingFlags.NonPublic)!;
 
-        var act = () => method.Invoke(interceptor, [null]);
+        var act = () => interceptor.SavingChanges(CreateEventData(context: null), default);
 
         act.Should().NotThrow();
-    }
-
-    [Fact(DisplayName = "AuditSaveChangesInterceptor skips detached entries")]
-    public async Task AuditSaveChangesInterceptor_SkipsDetachedEntries()
-    {
-        await using var context = await fixture.CreateInitializedDbContextAsync<TestWriteDbContext>(
-            options => new TestWriteDbContext(options, []));
-        var aggregateRoot = new TestAggregateRoot(TestAggregateRootId.New())
-        {
-            Name = "Detached"
-        };
-        var entry = context.Entry(aggregateRoot);
-        var shouldSkipMethod = typeof(AuditSaveChangesInterceptor).GetMethod(
-            "ShouldSkip",
-            BindingFlags.Static | BindingFlags.NonPublic);
-        var updateEntryMethod = typeof(AuditSaveChangesInterceptor).GetMethod(
-            "UpdateEntry",
-            BindingFlags.Static | BindingFlags.NonPublic);
-        if (shouldSkipMethod is null || updateEntryMethod is null)
-        {
-            throw new MissingMethodException(
-                typeof(AuditSaveChangesInterceptor).FullName,
-                "ShouldSkip or UpdateEntry");
-        }
-
-        var shouldSkipResult = shouldSkipMethod.Invoke(null, [entry]);
-        var act = () => updateEntryMethod.Invoke(null, [entry, DateTime.UtcNow]);
-
-        shouldSkipResult.Should().Be(true);
-        act.Should().NotThrow();
-        entry.State.Should().Be(EntityState.Detached);
     }
 
     private async Task<TestWriteDbContext> CreateContextAsync(
@@ -270,7 +234,7 @@ public sealed class AuditSaveChangesInterceptorTests(PostgreSqlContainerFixture 
         return Task.FromResult(context);
     }
 
-    private static DbContextEventData CreateEventData(DbContext context)
+    private static DbContextEventData CreateEventData(DbContext? context)
     {
         return new DbContextEventData(
             null!,

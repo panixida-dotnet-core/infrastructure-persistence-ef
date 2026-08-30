@@ -14,7 +14,7 @@ internal static class ModelBuilderExtensions
     {
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
-            if (entityType.IsOwned() && ShouldSkipOwnedEntityType(entityType))
+            if (ShouldSkipEntityType(entityType))
             {
                 continue;
             }
@@ -34,16 +34,21 @@ internal static class ModelBuilderExtensions
         }
     }
 
-    private static bool ShouldSkipOwnedEntityType(IMutableEntityType entityType)
+    private static bool ShouldSkipEntityType(IMutableEntityType entityType)
     {
         var ownership = entityType.FindOwnership();
-        if (ownership?.IsUnique is not false)
+        if (ownership is null)
+        {
+            return false;
+        }
+
+        if (ownership.IsUnique)
         {
             return true;
         }
 
-        return entityType is IConventionEntityType conventionEntityType
-            && conventionEntityType.GetTableNameConfigurationSource() == ConfigurationSource.Explicit;
+        var conventionEntityType = (IConventionEntityType)entityType;
+        return conventionEntityType.GetTableNameConfigurationSource() == ConfigurationSource.Explicit;
     }
 
     public static void RegisterReadDbModels(

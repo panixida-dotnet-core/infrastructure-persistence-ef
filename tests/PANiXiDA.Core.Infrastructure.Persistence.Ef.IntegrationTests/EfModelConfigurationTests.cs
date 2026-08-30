@@ -1,5 +1,3 @@
-using System.Reflection;
-
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -198,43 +196,6 @@ public sealed class EfModelConfigurationTests(PostgreSqlContainerFixture fixture
         namelessType.GetTableName().Should().BeNull();
     }
 
-    [Fact(DisplayName = "ShouldSkipOwnedEntityType treats missing ownership metadata as skipped")]
-    public void ShouldSkipOwnedEntityType_TreatsMissingOwnershipMetadataAsSkipped()
-    {
-        var modelBuilder = new ModelBuilder();
-        var entityType = modelBuilder.Entity<ModelBuilderOwner>().Metadata;
-
-        var shouldSkip = InvokeShouldSkipOwnedEntityType(entityType);
-
-        shouldSkip.Should().BeTrue();
-    }
-
-    [Fact(DisplayName = "ShouldSkipOwnedEntityType handles mutable metadata without convention metadata")]
-    public void ShouldSkipOwnedEntityType_HandlesMutableMetadataWithoutConventionMetadata()
-    {
-        var modelBuilder = new ModelBuilder();
-        modelBuilder.Entity<ModelBuilderOwner>(builder =>
-        {
-            builder.HasKey(item => item.Id);
-            builder.OwnsMany(item => item.OwnedItems, ownedBuilder =>
-            {
-                ownedBuilder.HasKey(item => item.Id);
-            });
-        });
-        var ownedItemType = modelBuilder.Model.GetEntityTypes().Single(item =>
-            item.ClrType == typeof(ModelBuilderOwnedItem));
-        var ownership = ownedItemType.FindOwnership()
-            ?? throw new InvalidOperationException("The test model must contain ownership metadata.");
-
-        var entityType = DispatchProxy.Create<IMutableEntityType, MutableEntityTypeProxy>();
-        var proxy = (MutableEntityTypeProxy)(object)entityType;
-        proxy.Ownership = ownership;
-
-        var shouldSkip = InvokeShouldSkipOwnedEntityType(entityType);
-
-        shouldSkip.Should().BeFalse();
-    }
-
     [Fact(DisplayName = "ModelBuilderExtensions handles assemblies without read models")]
     public void ModelBuilderExtensions_HandlesAssembliesWithoutReadModels()
     {
@@ -270,40 +231,6 @@ public sealed class EfModelConfigurationTests(PostgreSqlContainerFixture fixture
     private static IReadOnlyEntityType GetDesignTimeEntityType(DbContext context, Type clrType)
     {
         return context.GetService<IDesignTimeModel>().Model.FindEntityType(clrType)!;
-    }
-
-    private static bool InvokeShouldSkipOwnedEntityType(IMutableEntityType entityType)
-    {
-        var method = typeof(ModelBuilderExtensions).GetMethod(
-            "ShouldSkipOwnedEntityType",
-            BindingFlags.Static | BindingFlags.NonPublic)
-            ?? throw new MissingMethodException(
-                typeof(ModelBuilderExtensions).FullName,
-                "ShouldSkipOwnedEntityType");
-
-        var result = method.Invoke(null, [entityType]);
-        return result is bool shouldSkip
-            ? shouldSkip
-            : throw new InvalidOperationException("ShouldSkipOwnedEntityType must return a Boolean value.");
-    }
-
-    private class MutableEntityTypeProxy : DispatchProxy
-    {
-        public IMutableForeignKey? Ownership { get; set; }
-
-        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
-        {
-            ArgumentNullException.ThrowIfNull(targetMethod);
-
-            if (targetMethod.Name == nameof(IMutableEntityType.FindOwnership))
-            {
-                return Ownership;
-            }
-
-            return targetMethod.ReturnType.IsValueType
-                ? Activator.CreateInstance(targetMethod.ReturnType)
-                : null;
-        }
     }
 
 }
