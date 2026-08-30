@@ -1,7 +1,7 @@
-using System.Reflection;
+using System.Data.Common;
 
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.DbContexts;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.Entities;
@@ -180,45 +180,62 @@ public sealed class EfUnitOfWorkTests(PostgreSqlContainerFixture fixture)
     [Fact(DisplayName = "CommitTransactionAsync disposes and clears a failed transaction")]
     public async Task CommitTransactionAsync_DisposesAndClearsFailedTransaction()
     {
-        await using var context = new TransactionalDbContext(
-            new DbContextOptionsBuilder<TransactionalDbContext>().Options);
-        var unitOfWork = new EfUnitOfWork<TransactionalDbContext>(context);
         var exception = new InvalidOperationException("Commit failed.");
-        var transaction = new FailingDbContextTransaction(commitException: exception);
-        SetCurrentTransaction(unitOfWork, transaction);
+        var options = await CreateInitializedOptionsAsync(
+            new FailingCommitTransactionInterceptor(exception));
+        await using var context = new TransactionalDbContext(options);
+        var unitOfWork = new EfUnitOfWork<TransactionalDbContext>(context);
+        await unitOfWork.BeginTransactionAsync(TestContext.Current.CancellationToken);
 
         var act = () => unitOfWork.CommitTransactionAsync(
             TestContext.Current.CancellationToken);
 
         await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("Commit failed.");
-        transaction.IsDisposed.Should().BeTrue();
-        GetCurrentTransaction(unitOfWork).Should().BeNull();
+        unitOfWork.HasActiveTransaction.Should().BeFalse();
+
+        await unitOfWork.BeginTransactionAsync(TestContext.Current.CancellationToken);
+
+        unitOfWork.HasActiveTransaction.Should().BeTrue();
+        await unitOfWork.DisposeTransactionAsync();
     }
 
     [Fact(DisplayName = "RollbackTransactionAsync disposes and clears a failed transaction")]
     public async Task RollbackTransactionAsync_DisposesAndClearsFailedTransaction()
     {
-        await using var context = new TransactionalDbContext(
-            new DbContextOptionsBuilder<TransactionalDbContext>().Options);
-        var unitOfWork = new EfUnitOfWork<TransactionalDbContext>(context);
         var exception = new InvalidOperationException("Rollback failed.");
-        var transaction = new FailingDbContextTransaction(rollbackException: exception);
-        SetCurrentTransaction(unitOfWork, transaction);
+        var options = await CreateInitializedOptionsAsync(
+            new FailingRollbackTransactionInterceptor(exception));
+        await using var context = new TransactionalDbContext(options);
+        var unitOfWork = new EfUnitOfWork<TransactionalDbContext>(context);
+        await unitOfWork.BeginTransactionAsync(TestContext.Current.CancellationToken);
 
         var act = () => unitOfWork.RollbackTransactionAsync(
             TestContext.Current.CancellationToken);
 
         await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("Rollback failed.");
-        transaction.IsDisposed.Should().BeTrue();
-        GetCurrentTransaction(unitOfWork).Should().BeNull();
+        unitOfWork.HasActiveTransaction.Should().BeFalse();
+
+        await unitOfWork.BeginTransactionAsync(TestContext.Current.CancellationToken);
+
+        unitOfWork.HasActiveTransaction.Should().BeTrue();
+        await unitOfWork.DisposeTransactionAsync();
     }
 
-    private async Task<DbContextOptions<TransactionalDbContext>> CreateInitializedOptionsAsync()
+    private async Task<DbContextOptions<TransactionalDbContext>> CreateInitializedOptionsAsync(
+        IInterceptor? interceptor = null)
     {
         var options = fixture.CreateOptions<TransactionalDbContext>(
             PostgreSqlContainerFixture.CreateDatabaseName());
         await EnsureCreatedAsync(options);
-        return options;
+
+        if (interceptor is null)
+        {
+            return options;
+        }
+
+        return new DbContextOptionsBuilder<TransactionalDbContext>(options)
+            .AddInterceptors(interceptor)
+            .Options;
     }
 
     private static async Task EnsureCreatedAsync(DbContextOptions<TransactionalDbContext> options)
@@ -233,118 +250,29 @@ public sealed class EfUnitOfWorkTests(PostgreSqlContainerFixture fixture)
         return await context.Entities.CountAsync(TestContext.Current.CancellationToken);
     }
 
-    private static void SetCurrentTransaction(
-        EfUnitOfWork<TransactionalDbContext> unitOfWork,
-        IDbContextTransaction transaction)
+    private sealed class FailingCommitTransactionInterceptor(Exception exception)
+        : DbTransactionInterceptor
     {
-        var field = typeof(EfUnitOfWork<TransactionalDbContext>).GetField(
-            "currentTransaction",
-            BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new MissingFieldException(
-                typeof(EfUnitOfWork<TransactionalDbContext>).FullName,
-                "currentTransaction");
-
-        field.SetValue(unitOfWork, transaction);
+        public override ValueTask<InterceptionResult> TransactionCommittingAsync(
+            DbTransaction transaction,
+            TransactionEventData eventData,
+            InterceptionResult result,
+            CancellationToken cancellationToken = default)
+        {
+            return ValueTask.FromException<InterceptionResult>(exception);
+        }
     }
 
-    private static IDbContextTransaction? GetCurrentTransaction(
-        EfUnitOfWork<TransactionalDbContext> unitOfWork)
+    private sealed class FailingRollbackTransactionInterceptor(Exception exception)
+        : DbTransactionInterceptor
     {
-        var field = typeof(EfUnitOfWork<TransactionalDbContext>).GetField(
-            "currentTransaction",
-            BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new MissingFieldException(
-                typeof(EfUnitOfWork<TransactionalDbContext>).FullName,
-                "currentTransaction");
-
-        return field.GetValue(unitOfWork) as IDbContextTransaction;
-    }
-
-    private sealed class FailingDbContextTransaction(
-        Exception? commitException = null,
-        Exception? rollbackException = null) : IDbContextTransaction
-    {
-        public Guid TransactionId { get; } = Guid.NewGuid();
-
-        public bool SupportsSavepoints => false;
-
-        public bool IsDisposed { get; private set; }
-
-        public void Commit()
-        {
-            if (commitException is not null)
-            {
-                throw commitException;
-            }
-        }
-
-        public Task CommitAsync(CancellationToken cancellationToken = default)
-        {
-            return commitException is null
-                ? Task.CompletedTask
-                : Task.FromException(commitException);
-        }
-
-        public void Rollback()
-        {
-            if (rollbackException is not null)
-            {
-                throw rollbackException;
-            }
-        }
-
-        public Task RollbackAsync(CancellationToken cancellationToken = default)
-        {
-            return rollbackException is null
-                ? Task.CompletedTask
-                : Task.FromException(rollbackException);
-        }
-
-        public void Dispose()
-        {
-            IsDisposed = true;
-        }
-
-        public ValueTask DisposeAsync()
-        {
-            IsDisposed = true;
-            return ValueTask.CompletedTask;
-        }
-
-        public void CreateSavepoint(string name)
-        {
-            throw new NotSupportedException();
-        }
-
-        public Task CreateSavepointAsync(
-            string name,
+        public override ValueTask<InterceptionResult> TransactionRollingBackAsync(
+            DbTransaction transaction,
+            TransactionEventData eventData,
+            InterceptionResult result,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromException(new NotSupportedException());
-        }
-
-        public void RollbackToSavepoint(string name)
-        {
-            throw new NotSupportedException();
-        }
-
-        public Task RollbackToSavepointAsync(
-            string name,
-            CancellationToken cancellationToken = default)
-        {
-            return Task.FromException(new NotSupportedException());
-        }
-
-        public void ReleaseSavepoint(string name)
-        {
-            throw new NotSupportedException();
-        }
-
-        public Task ReleaseSavepointAsync(
-            string name,
-            CancellationToken cancellationToken = default)
-        {
-            return Task.FromException(new NotSupportedException());
+            return ValueTask.FromException<InterceptionResult>(exception);
         }
     }
 }
