@@ -1,4 +1,7 @@
+using System.Data.Common;
+
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.DbContexts;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.Entities;
@@ -174,12 +177,65 @@ public sealed class EfUnitOfWorkTests(PostgreSqlContainerFixture fixture)
         unitOfWork.HasActiveTransaction.Should().BeFalse();
     }
 
-    private async Task<DbContextOptions<TransactionalDbContext>> CreateInitializedOptionsAsync()
+    [Fact(DisplayName = "CommitTransactionAsync disposes and clears a failed transaction")]
+    public async Task CommitTransactionAsync_DisposesAndClearsFailedTransaction()
+    {
+        var exception = new InvalidOperationException("Commit failed.");
+        var options = await CreateInitializedOptionsAsync(
+            new FailingCommitTransactionInterceptor(exception));
+        await using var context = new TransactionalDbContext(options);
+        var unitOfWork = new EfUnitOfWork<TransactionalDbContext>(context);
+        await unitOfWork.BeginTransactionAsync(TestContext.Current.CancellationToken);
+
+        var act = () => unitOfWork.CommitTransactionAsync(
+            TestContext.Current.CancellationToken);
+
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("Commit failed.");
+        unitOfWork.HasActiveTransaction.Should().BeFalse();
+
+        await unitOfWork.BeginTransactionAsync(TestContext.Current.CancellationToken);
+
+        unitOfWork.HasActiveTransaction.Should().BeTrue();
+        await unitOfWork.DisposeTransactionAsync();
+    }
+
+    [Fact(DisplayName = "RollbackTransactionAsync disposes and clears a failed transaction")]
+    public async Task RollbackTransactionAsync_DisposesAndClearsFailedTransaction()
+    {
+        var exception = new InvalidOperationException("Rollback failed.");
+        var options = await CreateInitializedOptionsAsync(
+            new FailingRollbackTransactionInterceptor(exception));
+        await using var context = new TransactionalDbContext(options);
+        var unitOfWork = new EfUnitOfWork<TransactionalDbContext>(context);
+        await unitOfWork.BeginTransactionAsync(TestContext.Current.CancellationToken);
+
+        var act = () => unitOfWork.RollbackTransactionAsync(
+            TestContext.Current.CancellationToken);
+
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("Rollback failed.");
+        unitOfWork.HasActiveTransaction.Should().BeFalse();
+
+        await unitOfWork.BeginTransactionAsync(TestContext.Current.CancellationToken);
+
+        unitOfWork.HasActiveTransaction.Should().BeTrue();
+        await unitOfWork.DisposeTransactionAsync();
+    }
+
+    private async Task<DbContextOptions<TransactionalDbContext>> CreateInitializedOptionsAsync(
+        IInterceptor? interceptor = null)
     {
         var options = fixture.CreateOptions<TransactionalDbContext>(
             PostgreSqlContainerFixture.CreateDatabaseName());
         await EnsureCreatedAsync(options);
-        return options;
+
+        if (interceptor is null)
+        {
+            return options;
+        }
+
+        return new DbContextOptionsBuilder<TransactionalDbContext>(options)
+            .AddInterceptors(interceptor)
+            .Options;
     }
 
     private static async Task EnsureCreatedAsync(DbContextOptions<TransactionalDbContext> options)
@@ -192,5 +248,31 @@ public sealed class EfUnitOfWorkTests(PostgreSqlContainerFixture fixture)
     {
         await using var context = new TransactionalDbContext(options);
         return await context.Entities.CountAsync(TestContext.Current.CancellationToken);
+    }
+
+    private sealed class FailingCommitTransactionInterceptor(Exception exception)
+        : DbTransactionInterceptor
+    {
+        public override ValueTask<InterceptionResult> TransactionCommittingAsync(
+            DbTransaction transaction,
+            TransactionEventData eventData,
+            InterceptionResult result,
+            CancellationToken cancellationToken = default)
+        {
+            return ValueTask.FromException<InterceptionResult>(exception);
+        }
+    }
+
+    private sealed class FailingRollbackTransactionInterceptor(Exception exception)
+        : DbTransactionInterceptor
+    {
+        public override ValueTask<InterceptionResult> TransactionRollingBackAsync(
+            DbTransaction transaction,
+            TransactionEventData eventData,
+            InterceptionResult result,
+            CancellationToken cancellationToken = default)
+        {
+            return ValueTask.FromException<InterceptionResult>(exception);
+        }
     }
 }

@@ -1,6 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
+using System.Runtime.ExceptionServices;
+
 using PANiXiDA.Core.Application.Persistence;
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Write;
@@ -35,6 +37,7 @@ public sealed class EfUnitOfWork<TDbContext>(TDbContext dbContext) : IUnitOfWork
 
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         currentTransaction = transaction;
+        Exception? exception = null;
 
         try
         {
@@ -42,14 +45,17 @@ public sealed class EfUnitOfWork<TDbContext>(TDbContext dbContext) : IUnitOfWork
             await dbContext.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }
-        catch
+        catch (Exception caughtException)
+        {
+            exception = caughtException;
+        }
+
+        TakeCurrentTransaction();
+
+        if (exception is not null)
         {
             await transaction.RollbackAsync(cancellationToken);
-            throw;
-        }
-        finally
-        {
-            currentTransaction = null;
+            ExceptionDispatchInfo.Throw(exception);
         }
     }
 
@@ -67,50 +73,51 @@ public sealed class EfUnitOfWork<TDbContext>(TDbContext dbContext) : IUnitOfWork
     /// <inheritdoc />
     public async Task CommitTransactionAsync(CancellationToken cancellationToken)
     {
-        if (currentTransaction == null)
-        {
-            return;
-        }
-
-        try
-        {
-            await currentTransaction.CommitAsync(cancellationToken);
-        }
-        finally
-        {
-            await currentTransaction.DisposeAsync();
-            currentTransaction = null;
-        }
+        await CompleteTransactionAsync(
+            static (transaction, token) => transaction.CommitAsync(token),
+            cancellationToken);
     }
 
     /// <inheritdoc />
     public async Task RollbackTransactionAsync(CancellationToken cancellationToken)
     {
-        if (currentTransaction == null)
+        await CompleteTransactionAsync(
+            static (transaction, token) => transaction.RollbackAsync(token),
+            cancellationToken);
+    }
+
+    private async Task CompleteTransactionAsync(
+        Func<IDbContextTransaction, CancellationToken, Task> completeTransactionAsync,
+        CancellationToken cancellationToken)
+    {
+        var transaction = TakeCurrentTransaction();
+        if (transaction == null)
         {
             return;
         }
 
-        try
+        await using (transaction)
         {
-            await currentTransaction.RollbackAsync(cancellationToken);
-        }
-        finally
-        {
-            await currentTransaction.DisposeAsync();
-            currentTransaction = null;
+            await completeTransactionAsync(transaction, cancellationToken);
         }
     }
 
     /// <inheritdoc />
     public async ValueTask DisposeTransactionAsync()
     {
-        if (currentTransaction == null)
+        var transaction = TakeCurrentTransaction();
+        if (transaction == null)
         {
             return;
         }
 
-        await currentTransaction.DisposeAsync();
+        await transaction.DisposeAsync();
+    }
+
+    private IDbContextTransaction? TakeCurrentTransaction()
+    {
+        var transaction = currentTransaction;
         currentTransaction = null;
+        return transaction;
     }
 }

@@ -1,5 +1,3 @@
-using System.Reflection;
-
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
@@ -206,11 +204,8 @@ public sealed class AuditSaveChangesInterceptorTests(PostgreSqlContainerFixture 
     public void AuditSaveChangesInterceptor_IgnoresNullDbContextEventData()
     {
         var interceptor = new AuditSaveChangesInterceptor(TimeProvider.System);
-        var method = typeof(AuditSaveChangesInterceptor).GetMethod(
-            "UpdateEntities",
-            BindingFlags.Instance | BindingFlags.NonPublic)!;
 
-        var act = () => method.Invoke(interceptor, [null]);
+        var act = () => interceptor.SavingChanges(CreateEventData(context: null), default);
 
         act.Should().NotThrow();
     }
@@ -239,7 +234,7 @@ public sealed class AuditSaveChangesInterceptorTests(PostgreSqlContainerFixture 
         return Task.FromResult(context);
     }
 
-    private static DbContextEventData CreateEventData(DbContext context)
+    private static DbContextEventData CreateEventData(DbContext? context)
     {
         return new DbContextEventData(
             null!,

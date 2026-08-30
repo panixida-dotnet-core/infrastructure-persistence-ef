@@ -54,11 +54,6 @@ internal sealed class AuditSaveChangesInterceptor(TimeProvider timeProvider)
 
         foreach (var entry in dbContext.ChangeTracker.Entries())
         {
-            if (ShouldSkip(entry))
-            {
-                continue;
-            }
-
             UpdateEntry(entry, now);
         }
     }
@@ -81,11 +76,6 @@ internal sealed class AuditSaveChangesInterceptor(TimeProvider timeProvider)
                 UpdateDeletedEntry(entry, auditProperties, now);
                 break;
         }
-    }
-
-    private static bool ShouldSkip(EntityEntry entry)
-    {
-        return entry.State == EntityState.Detached || entry.State == EntityState.Unchanged;
     }
 
     private static AuditProperties GetAuditProperties(EntityEntry entry)
