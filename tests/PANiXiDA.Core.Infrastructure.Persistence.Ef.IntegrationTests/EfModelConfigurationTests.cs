@@ -223,11 +223,8 @@ public sealed class EfModelConfigurationTests(PostgreSqlContainerFixture fixture
         });
         var ownedItemType = modelBuilder.Model.GetEntityTypes().Single(item =>
             item.ClrType == typeof(ModelBuilderOwnedItem));
-        var ownership = ownedItemType.FindOwnership();
-        if (ownership is null)
-        {
-            throw new InvalidOperationException("The test model must contain ownership metadata.");
-        }
+        var ownership = ownedItemType.FindOwnership()
+            ?? throw new InvalidOperationException("The test model must contain ownership metadata.");
 
         var entityType = DispatchProxy.Create<IMutableEntityType, MutableEntityTypeProxy>();
         var proxy = (MutableEntityTypeProxy)(object)entityType;
@@ -279,13 +276,10 @@ public sealed class EfModelConfigurationTests(PostgreSqlContainerFixture fixture
     {
         var method = typeof(ModelBuilderExtensions).GetMethod(
             "ShouldSkipOwnedEntityType",
-            BindingFlags.Static | BindingFlags.NonPublic);
-        if (method is null)
-        {
-            throw new MissingMethodException(
+            BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new MissingMethodException(
                 typeof(ModelBuilderExtensions).FullName,
                 "ShouldSkipOwnedEntityType");
-        }
 
         var result = method.Invoke(null, [entityType]);
         return result is bool shouldSkip

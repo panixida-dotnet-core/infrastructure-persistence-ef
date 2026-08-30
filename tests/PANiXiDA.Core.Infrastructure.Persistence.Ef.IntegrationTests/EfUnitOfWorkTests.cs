@@ -239,13 +239,10 @@ public sealed class EfUnitOfWorkTests(PostgreSqlContainerFixture fixture)
     {
         var field = typeof(EfUnitOfWork<TransactionalDbContext>).GetField(
             "currentTransaction",
-            BindingFlags.Instance | BindingFlags.NonPublic);
-        if (field is null)
-        {
-            throw new MissingFieldException(
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new MissingFieldException(
                 typeof(EfUnitOfWork<TransactionalDbContext>).FullName,
                 "currentTransaction");
-        }
 
         field.SetValue(unitOfWork, transaction);
     }
@@ -255,13 +252,10 @@ public sealed class EfUnitOfWorkTests(PostgreSqlContainerFixture fixture)
     {
         var field = typeof(EfUnitOfWork<TransactionalDbContext>).GetField(
             "currentTransaction",
-            BindingFlags.Instance | BindingFlags.NonPublic);
-        if (field is null)
-        {
-            throw new MissingFieldException(
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new MissingFieldException(
                 typeof(EfUnitOfWork<TransactionalDbContext>).FullName,
                 "currentTransaction");
-        }
 
         return field.GetValue(unitOfWork) as IDbContextTransaction;
     }
