@@ -195,41 +195,51 @@ public sealed class SortingGenerator : IIncrementalGenerator
                 continue;
             }
 
-            var type = property.Type;
-            var nullable = type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T };
-            if (nullable)
-            {
-                type = ((INamedTypeSymbol)type).TypeArguments[0];
-            }
-
-            var path = prefix + property.Name;
-            var propertyAccess = access + ".@" + property.Name;
-            if (IsScalar(type))
-            {
-                var resultType = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                var selector = guards.Count == 0 ? propertyAccess
-                    : string.Join(" || ", guards) + " ? default(" + resultType + "?) : " + propertyAccess;
-                paths.Add((path, selector));
-            }
-            else if (type is INamedTypeSymbol nested)
-            {
-                var ns = nested.ContainingNamespace.ToDisplayString();
-                if (nested.SpecialType != SpecialType.System_Collections_IEnumerable
-                    && !nested.AllInterfaces.Any(contract => contract.SpecialType == SpecialType.System_Collections_IEnumerable)
-                    && ns != "System" && !ns.StartsWith("System.", StringComparison.Ordinal))
-                {
-                    var nestedGuards = new List<string>(guards);
-                    if (type.IsReferenceType || nullable)
-                    {
-                        nestedGuards.Add(propertyAccess + " == null");
-                    }
-
-                    CollectPaths(nested, path + ".", propertyAccess + (nullable ? ".Value" : ""), nestedGuards, ancestors, paths, cancellationToken);
-                }
-            }
+            CollectPropertyPath(property, prefix, access, guards, ancestors, paths, cancellationToken);
         }
 
         ancestors.Remove(model.OriginalDefinition);
+    }
+
+    private static void CollectPropertyPath(IPropertySymbol property, string prefix, string access, List<string> guards,
+        HashSet<INamedTypeSymbol> ancestors, List<(string Path, string Selector)> paths, CancellationToken cancellationToken)
+    {
+        var type = property.Type;
+        var nullable = type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T };
+        if (nullable)
+        {
+            type = ((INamedTypeSymbol)type).TypeArguments[0];
+        }
+
+        var path = prefix + property.Name;
+        var propertyAccess = access + ".@" + property.Name;
+        if (IsScalar(type))
+        {
+            var resultType = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            var selector = guards.Count == 0 ? propertyAccess
+                : string.Join(" || ", guards) + " ? default(" + resultType + "?) : " + propertyAccess;
+            paths.Add((path, selector));
+            return;
+        }
+
+        if (type is not INamedTypeSymbol nested)
+        {
+            return;
+        }
+
+        var ns = nested.ContainingNamespace.ToDisplayString();
+        if (nested.SpecialType != SpecialType.System_Collections_IEnumerable
+            && !nested.AllInterfaces.Any(contract => contract.SpecialType == SpecialType.System_Collections_IEnumerable)
+            && ns != "System" && !ns.StartsWith("System.", StringComparison.Ordinal))
+        {
+            var nestedGuards = new List<string>(guards);
+            if (type.IsReferenceType || nullable)
+            {
+                nestedGuards.Add(propertyAccess + " == null");
+            }
+
+            CollectPaths(nested, path + ".", propertyAccess + (nullable ? ".Value" : ""), nestedGuards, ancestors, paths, cancellationToken);
+        }
     }
 
     private static IEnumerable<IPropertySymbol> Properties(INamedTypeSymbol model)
