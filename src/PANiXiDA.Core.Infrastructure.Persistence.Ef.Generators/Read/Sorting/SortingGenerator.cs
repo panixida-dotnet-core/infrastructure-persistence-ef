@@ -40,7 +40,7 @@ public sealed class SortingGenerator : IIncrementalGenerator
                 static (node, _) => node is TypeDeclarationSyntax { BaseList: not null },
                 static (syntax, token) => syntax.SemanticModel.GetDeclaredSymbol(syntax.Node, token) as INamedTypeSymbol)
             .Combine(contract)
-            .Where(static pair => pair.Left is { IsAbstract: false, TypeKind: TypeKind.Class or TypeKind.Struct }
+            .Where(static pair => pair.Left is { IsAbstract: false }
                 && pair.Right is not null && pair.Left.AllInterfaces.Any(type => SymbolEqualityComparer.Default.Equals(type.OriginalDefinition, pair.Right)))
             .Collect();
 

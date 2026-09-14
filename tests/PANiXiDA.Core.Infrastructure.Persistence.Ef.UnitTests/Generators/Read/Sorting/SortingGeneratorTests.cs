@@ -27,6 +27,8 @@ public sealed class SortingGeneratorTests
                 public List<string> Collection { get; init; } = [];
                 public string[] Array { get; init; } = [];
                 public object Object { get; init; } = new();
+                public System.Type Type { get; init; } = typeof(object);
+                public IntPtr Pointer { get; init; }
                 public string this[int index] => "";
                 public static string Static => "";
                 public string WriteOnly { set { } }
@@ -43,7 +45,7 @@ public sealed class SortingGeneratorTests
             {
                 public static IQueryable<Model> ProjectTo(IQueryable<DbModel> query) => throw new NotImplementedException();
             }
-            public partial class Mapper { }
+            public partial class Mapper : IReadModelMapper<int, DbModel, Model> { }
             """;
 
         var result = Generate(source);
@@ -51,6 +53,8 @@ public sealed class SortingGeneratorTests
         var generated = result.GeneratedSources.Should().ContainSingle().Subject.SourceText.ToString();
         generated.Should().Contain("item.@Department.@Name", "item.@Department == null", "default(int?)", "item.@Detail.Value.@Date", "item.@Other.@Rank", "item.@Inherited");
         generated.Should().NotContain("item.@Collection").And.NotContain("item.@Array").And.NotContain("item.@Object")
+            .And.NotContain("item.@Type")
+            .And.NotContain("item.@Pointer")
             .And.NotContain("item.@Static").And.NotContain("item.@Private").And.NotContain("item.@WriteOnly").And.NotContain(".@Parent");
         generated.Should().NotContain("System.Reflection").And.NotContain("MakeGenericMethod").And.NotContain(".Compile(");
     }
@@ -220,6 +224,29 @@ public sealed class SortingGeneratorTests
             """);
 
         result.GeneratedSources.Should().BeEmpty();
+    }
+
+    [Fact(DisplayName = "Sorting generator ignores projects without the EF mapper contract")]
+    public void Generate_IgnoresProjectsWithoutEf()
+    {
+        var references = References.Where(reference => !reference.Display!.EndsWith("PANiXiDA.Core.Infrastructure.Persistence.Ef.dll", StringComparison.OrdinalIgnoreCase));
+        var compilation = CSharpCompilation.Create("NoEf", [CSharpSyntaxTree.ParseText("public class Model : object { }", cancellationToken: TestContext.Current.CancellationToken)], references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var driver = CSharpGeneratorDriver.Create(new SortingGenerator()).RunGenerators(compilation, TestContext.Current.CancellationToken);
+
+        driver.GetRunResult().GeneratedTrees.Should().BeEmpty();
+        driver.GetRunResult().Diagnostics.Should().BeEmpty();
+    }
+
+    [Fact(DisplayName = "Sorting generator reports multiple projection contracts on one mapper")]
+    public void Generate_RejectsMultipleContracts()
+    {
+        Generate("""
+            public record Model;
+            public record Other;
+            public partial class Mapper : IReadModelMapper<int, DbModel, Model>, IReadModelMapper<int, DbModel, Other> { }
+            """, "PANEFSG002");
     }
 
     private static GeneratorRunResult Generate(string source, string? expectedDiagnostic = null, MetadataReference? additionalReference = null)
