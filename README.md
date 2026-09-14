@@ -180,25 +180,34 @@ public sealed class OrderRepository(
 ```csharp
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Models;
+using PANiXiDA.Core.Application.Querying;
 
 public sealed class OrderReadDbModel : AuditableReadDbModel<Guid>
 {
     public string Number { get; set; } = string.Empty;
 }
 
-public sealed record OrderReadModel(Guid Id, string Number);
+public sealed record OrderReadModel : IReadModel
+{
+    public Guid Id { get; init; }
+    public required string Number { get; init; }
+}
 
-public sealed class OrderReadModelMapper
+public sealed partial class OrderReadModelMapper
     : IReadModelMapper<Guid, OrderReadDbModel, OrderReadModel>
 {
     public static IQueryable<OrderReadModel> ProjectTo(IQueryable<OrderReadDbModel> query)
     {
-        return query.Select(order => new OrderReadModel(order.Id, order.Number));
+        return query.Select(order => new OrderReadModel { Id = order.Id, Number = order.Number });
     }
 }
 ```
 
 Concrete `ReadDbModel<TId>` types in the read DbContext assembly are registered automatically. By default they are mapped as no-tracking models and excluded from migrations, which is useful when read models point to tables or views owned by another context.
+
+The package generates `ApplySorting` for partial mappers from the projected model's public scalar properties, including nested paths such as `department.name`. No sorting attributes or field mappings are required. CLR and camelCase paths are matched ignoring case.
+
+Use property initializers in SQL projections as above: EF Core cannot translate ordering by properties populated only through a DTO constructor. Sorting and pagination run after projection; counts also use the projected query, including supported `GroupBy` and `Distinct` projections.
 
 ### Read Repository
 
@@ -214,7 +223,7 @@ public interface IOrderReadRepository : IReadRepository<Guid>
 
     Task<PaginationResult<OrderReadModel>> GetPageAsync(
         PaginationParameters pagination,
-        SortParameters sort,
+        SortingParameters sort,
         CancellationToken cancellationToken);
 }
 
@@ -228,7 +237,7 @@ public sealed class OrderReadRepository(AppReadDbContext dbContext)
 
     public Task<PaginationResult<OrderReadModel>> GetPageAsync(
         PaginationParameters pagination,
-        SortParameters sort,
+        SortingParameters sort,
         CancellationToken cancellationToken)
     {
         return GetPagedResultAsync<OrderReadModel, OrderReadModelMapper>(
@@ -240,6 +249,8 @@ public sealed class OrderReadRepository(AppReadDbContext dbContext)
 }
 ```
 
+Sorting is optional and adds no implicit `Id` criterion. To append defaults while preserving client overrides, pass `sort.WithDefault(SortingParameters.Ascending(nameof(OrderReadModel.Number)))`. Validate requests with the Application-generated `OrderReadModelSortingValidator`.
+
 ## Behavior Notes
 
 - Audit timestamps are stored as EF Core shadow properties for write entities configured through `AuditableEntityConfiguration<TEntity>`.
@@ -247,7 +258,7 @@ public sealed class OrderReadRepository(AppReadDbContext dbContext)
 - Modified entities receive a new `UpdatedAt`; `CreatedAt` is marked as not modified.
 - Deleted entities that have `DeletedAt` are converted to modified entities and receive `DeletedAt` and `UpdatedAt`.
 - `AuditableReadDbModel<TId>` and auditable write configurations apply a query filter that hides rows where `DeletedAt` is not null.
-- `EfReadRepository` uses dynamic sorting field names; callers should pass known model property names, not arbitrary user input without validation.
+- `EfReadRepository` sorts by projected read model fields through generated typed selectors. Unsupported fields and directions are rejected; sorting does not discover members through runtime reflection.
 - Repository implementation scanning registers concrete, non-abstract, non-generic classes against non-generic contracts that inherit `IRepository<TId, TAggregateRoot>` or `IReadRepository<TId>`. Direct base generic repository interfaces are intentionally ignored.
 
 ## Project Structure
@@ -255,7 +266,8 @@ public sealed class OrderReadRepository(AppReadDbContext dbContext)
 ```text
 .
 |-- src/
-|   `-- PANiXiDA.Core.Infrastructure.Persistence.Ef/
+|   |-- PANiXiDA.Core.Infrastructure.Persistence.Ef/
+|   `-- PANiXiDA.Core.Infrastructure.Persistence.Ef.Generators/
 |-- tests/
 |   |-- PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests/
 |   `-- PANiXiDA.Core.Infrastructure.Persistence.Ef.UnitTests/

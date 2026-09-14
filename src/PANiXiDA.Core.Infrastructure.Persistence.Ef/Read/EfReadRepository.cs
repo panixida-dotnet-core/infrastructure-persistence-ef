@@ -7,8 +7,6 @@ using PANiXiDA.Core.Application.Querying.Sorting;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.DbContexts;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Models;
 
-using System.Linq.Dynamic.Core;
-
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Read;
 
 /// <summary>
@@ -66,17 +64,19 @@ public abstract class EfReadRepository
     /// <typeparam name="TReadModelMapper">The mapper used to project database read models.</typeparam>
     /// <param name="query">The query to paginate.</param>
     /// <param name="paginationParameters">The page-based pagination parameters.</param>
-    /// <param name="sortParameters">The sorting parameters.</param>
+    /// <param name="sortingParameters">The sorting parameters.</param>
     /// <param name="cancellationToken">The token used to cancel the operation.</param>
     /// <returns>The paged projected read model result.</returns>
     protected virtual async Task<PaginationResult<TReadModel>> GetPagedResultAsync<TReadModel, TReadModelMapper>(
         IQueryable<TReadDbModel> query,
         PaginationParameters paginationParameters,
-        SortParameters sortParameters,
+        SortingParameters sortingParameters,
         CancellationToken cancellationToken)
         where TReadModelMapper : IReadModelMapper<TId, TReadDbModel, TReadModel>
     {
-        var totalCount = await query.LongCountAsync(cancellationToken);
+        var dtoQuery = TReadModelMapper.ProjectTo(query);
+        dtoQuery = TReadModelMapper.ApplySorting(dtoQuery, sortingParameters);
+        var totalCount = await dtoQuery.LongCountAsync(cancellationToken);
 
         if (totalCount == 0)
         {
@@ -85,10 +85,7 @@ public abstract class EfReadRepository
                 paginationParameters.PageSize);
         }
 
-        query = ApplySort(query, sortParameters);
-        query = ApplyPagination(query, paginationParameters);
-
-        var dtoQuery = TReadModelMapper.ProjectTo(query);
+        dtoQuery = ApplyPagination(dtoQuery, paginationParameters);
 
         var items = await dtoQuery.ToListAsync(cancellationToken);
 
@@ -102,47 +99,17 @@ public abstract class EfReadRepository
     /// <summary>
     /// Applies page-based pagination to the specified query.
     /// </summary>
+    /// <typeparam name="TReadModel">The projected read model type.</typeparam>
     /// <param name="query">The query to paginate.</param>
     /// <param name="paginationParameters">The page-based pagination parameters.</param>
     /// <returns>The paginated query.</returns>
-    protected virtual IQueryable<TReadDbModel> ApplyPagination(
-        IQueryable<TReadDbModel> query,
+    protected virtual IQueryable<TReadModel> ApplyPagination<TReadModel>(
+        IQueryable<TReadModel> query,
         PaginationParameters paginationParameters)
     {
         return query
             .Skip(paginationParameters.Skip)
             .Take(paginationParameters.Take);
-    }
-
-    /// <summary>
-    /// Applies sorting to the specified query and falls back to descending identifier sorting when no field is provided.
-    /// </summary>
-    /// <param name="query">The query to sort.</param>
-    /// <param name="sortParameters">The sorting parameters.</param>
-    /// <returns>The sorted query.</returns>
-    protected virtual IQueryable<TReadDbModel> ApplySort(
-        IQueryable<TReadDbModel> query,
-        SortParameters sortParameters)
-    {
-        var id = nameof(ReadDbModel<>.Id);
-
-        if (string.IsNullOrWhiteSpace(sortParameters.Field))
-        {
-            return query.OrderBy($"{id} descending");
-        }
-
-        var sortField = sortParameters.Field.Trim();
-
-        var sortDirection = sortParameters.Order == SortOrder.Descending
-            ? "descending"
-            : "ascending";
-
-        if (string.Equals(sortField, id, StringComparison.OrdinalIgnoreCase))
-        {
-            return query.OrderBy($"{id} {sortDirection}");
-        }
-
-        return query.OrderBy($"{sortField} {sortDirection}, {id} descending");
     }
 
     /// <summary>

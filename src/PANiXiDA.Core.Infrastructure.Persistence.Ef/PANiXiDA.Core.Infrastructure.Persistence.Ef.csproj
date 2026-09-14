@@ -27,6 +27,16 @@
         <PackageReference Include="Npgsql" />
         <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
         <PackageReference Include="PANiXiDA.Core.Application" />
-        <PackageReference Include="System.Linq.Dynamic.Core" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../PANiXiDA.Core.Infrastructure.Persistence.Ef.Generators/PANiXiDA.Core.Infrastructure.Persistence.Ef.Generators.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"
+                          PrivateAssets="all" />
+        <None Include="../PANiXiDA.Core.Infrastructure.Persistence.Ef.Generators/bin/$(Configuration)/netstandard2.0/PANiXiDA.Core.Infrastructure.Persistence.Ef.Generators.dll"
+              Pack="true"
+              PackagePath="analyzers/dotnet/cs"
+              Visible="false" />
     </ItemGroup>
 </Project>

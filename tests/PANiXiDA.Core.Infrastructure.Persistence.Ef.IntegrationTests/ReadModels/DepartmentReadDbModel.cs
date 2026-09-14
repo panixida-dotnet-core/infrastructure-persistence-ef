@@ -2,10 +2,8 @@ using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Models;
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.ReadModels;
 
-internal sealed class ProductReadDbModel : ReadDbModel<int>
+internal sealed class DepartmentReadDbModel : ReadDbModel<int>
 {
     public string Name { get; set; } = string.Empty;
-    public int Score { get; set; }
-    public int? DepartmentId { get; set; }
-    public DepartmentReadDbModel? Department { get; set; }
+    public int Rank { get; set; }
 }

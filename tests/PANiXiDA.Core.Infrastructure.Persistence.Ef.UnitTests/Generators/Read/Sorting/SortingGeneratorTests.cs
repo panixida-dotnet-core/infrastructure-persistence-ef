@@ -1,0 +1,255 @@
+using System.Collections.Immutable;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Generators.Read.Sorting;
+
+namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.UnitTests.Generators.Read.Sorting;
+
+public sealed class SortingGeneratorTests
+{
+    private static readonly ImmutableArray<MetadataReference> References =
+    [
+        .. ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
+            .Select(path => MetadataReference.CreateFromFile(path))
+    ];
+
+    [Fact(DisplayName = "Sorting generator emits typed nullable nested selectors and ignores unsupported members")]
+    public void Generate_EmitsTypedPropertyPaths()
+    {
+        var source = """
+            public class BaseModel { public int Inherited { get; init; } }
+            public class Model : BaseModel
+            {
+                public string Name { get; init; } = "";
+                public Department? Department { get; init; }
+                public Detail? Detail { get; init; }
+                public Department Other { get; init; } = new();
+                public List<string> Collection { get; init; } = [];
+                public string[] Array { get; init; } = [];
+                public object Object { get; init; } = new();
+                public string this[int index] => "";
+                public static string Static => "";
+                public string WriteOnly { set { } }
+                public string Private { private get; set; } = "";
+            }
+            public class Department
+            {
+                public string Name { get; init; } = "";
+                public int Rank { get; init; }
+                public Model? Parent { get; init; }
+            }
+            public record struct Detail(DateTimeOffset Date);
+            public partial class Mapper : IReadModelMapper<int, DbModel, Model>
+            {
+                public static IQueryable<Model> ProjectTo(IQueryable<DbModel> query) => throw new NotImplementedException();
+            }
+            public partial class Mapper { }
+            """;
+
+        var result = Generate(source);
+
+        var generated = result.GeneratedSources.Should().ContainSingle().Subject.SourceText.ToString();
+        generated.Should().Contain("item.@Department.@Name", "item.@Department == null", "default(int?)", "item.@Detail.Value.@Date", "item.@Other.@Rank", "item.@Inherited");
+        generated.Should().NotContain("item.@Collection").And.NotContain("item.@Array").And.NotContain("item.@Object")
+            .And.NotContain("item.@Static").And.NotContain("item.@Private").And.NotContain("item.@WriteOnly").And.NotContain(".@Parent");
+        generated.Should().NotContain("System.Reflection").And.NotContain("MakeGenericMethod").And.NotContain(".Compile(");
+    }
+
+    [Theory(DisplayName = "Sorting generator supports scalar types")]
+    [InlineData("string")]
+    [InlineData("bool")]
+    [InlineData("int")]
+    [InlineData("decimal")]
+    [InlineData("double")]
+    [InlineData("Guid")]
+    [InlineData("DateTime")]
+    [InlineData("DateTimeOffset")]
+    [InlineData("DateOnly")]
+    [InlineData("TimeOnly")]
+    [InlineData("TimeSpan")]
+    [InlineData("DayOfWeek")]
+    public void Generate_SupportsScalarTypes(string type)
+    {
+        var result = Generate($$"""
+            public record Model({{type}} Value, {{type}}? Optional);
+            public partial class Mapper : IReadModelMapper<int, DbModel, Model>
+            {
+                public static IQueryable<Model> ProjectTo(IQueryable<DbModel> query) => throw new NotImplementedException();
+            }
+            """);
+
+        result.GeneratedSources.Should().ContainSingle().Subject.SourceText.ToString().Should().Contain("item.@Value", "item.@Optional");
+    }
+
+    [Theory(DisplayName = "Sorting generator reports unsupported mapper declarations")]
+    [InlineData("public class Mapper", "Model", "PANEFSG001")]
+    [InlineData("public partial class Mapper<T>", "T", "PANEFSG002")]
+    [InlineData("file partial class Mapper", "Model", "PANEFSG001")]
+    public void Generate_ReportsInvalidMapper(string declaration, string projection, string diagnostic)
+    {
+        var result = Generate($$"""
+            public record Model(string Name);
+            {{declaration}} : IReadModelMapper<int, DbModel, {{projection}}>
+            {
+                public static IQueryable<{{projection}}> ProjectTo(IQueryable<DbModel> query) => throw new NotImplementedException();
+            }
+            """, diagnostic);
+
+        result.GeneratedSources.Should().BeEmpty();
+    }
+
+    [Fact(DisplayName = "Sorting generator detects case-insensitive path collisions")]
+    public void Generate_RejectsAmbiguousFields()
+    {
+        Generate("""
+            public record Model(string Name, string name);
+            public partial class Mapper : IReadModelMapper<int, DbModel, Model>
+            {
+                public static IQueryable<Model> ProjectTo(IQueryable<DbModel> query) => throw new NotImplementedException();
+            }
+            """, "PANEFSG003");
+    }
+
+    [Fact(DisplayName = "Sorting generator permits a custom sorting implementation without partial")]
+    public void Generate_PreservesCustomSorting()
+    {
+        var result = Generate("""
+            public record Model(string Name);
+            public class Mapper : IReadModelMapper<int, DbModel, Model>
+            {
+                public static IQueryable<Model> ProjectTo(IQueryable<DbModel> query) => throw new NotImplementedException();
+                public static IQueryable<Model> ApplySorting(IQueryable<Model> query, SortingParameters sortingParameters) => query;
+            }
+            """);
+
+        result.GeneratedSources.Should().BeEmpty();
+    }
+
+    [Theory(DisplayName = "Sorting generator supports nested mapper classes and records")]
+    [InlineData("class")]
+    [InlineData("struct")]
+    [InlineData("record class")]
+    [InlineData("record struct")]
+    public void Generate_SupportsNestedMappers(string kind)
+    {
+        var result = Generate($$"""
+            namespace Example;
+            public record Model(int @event);
+            public partial class Outer<T>
+            {
+                public partial {{kind}} Mapper : IReadModelMapper<int, DbModel, Model>
+                {
+                    public static IQueryable<Model> ProjectTo(IQueryable<DbModel> query) => throw new NotImplementedException();
+                }
+            }
+            """);
+
+        result.GeneratedSources.Should().ContainSingle().Subject.SourceText.ToString().Should().Contain("item.@event");
+    }
+
+    [Fact(DisplayName = "Sorting generator accepts a model without sortable fields")]
+    public void Generate_SupportsEmptyModels()
+    {
+        Generate("""
+            public record Model;
+            public partial class Mapper : IReadModelMapper<int, DbModel, Model>
+            {
+                public static IQueryable<Model> ProjectTo(IQueryable<DbModel> query) => throw new NotImplementedException();
+            }
+            """);
+    }
+
+    [Fact(DisplayName = "Sorting generator reads inherited interfaces and concrete generic models from a referenced assembly")]
+    public void Generate_ReadsReferencedModels()
+    {
+        var models = CSharpCompilation.Create("ExternalModels", [CSharpSyntaxTree.ParseText("""
+            namespace External;
+            public interface IBase { int Rank { get; } }
+            public interface IDepartment : IBase { string Name { get; } }
+            public class Container<T>
+            {
+                public class Model
+                {
+                    public T Value { get; init; }
+                    public IDepartment Department { get; init; }
+                }
+            }
+            """, cancellationToken: TestContext.Current.CancellationToken)], References, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        using var stream = new MemoryStream();
+        models.Emit(stream, cancellationToken: TestContext.Current.CancellationToken).Success.Should().BeTrue();
+
+        var result = Generate("""
+            public partial class Mapper : IReadModelMapper<int, DbModel, External.Container<int>.Model>
+            {
+                public static IQueryable<External.Container<int>.Model> ProjectTo(IQueryable<DbModel> query) => throw new NotImplementedException();
+            }
+            """, additionalReference: MetadataReference.CreateFromImage(stream.ToArray()));
+
+        result.GeneratedSources.Should().ContainSingle().Subject.SourceText.ToString().Should().Contain("item.@Value", "item.@Department.@Rank", "item.@Department.@Name");
+    }
+
+    [Theory(DisplayName = "Sorting generator rejects open generic projections")]
+    [InlineData("Model<T>")]
+    [InlineData("Model<T[]>")]
+    [InlineData("Container<T>.Model")]
+    public void Generate_RejectsOpenGenericProjection(string projection)
+    {
+        Generate($$"""
+            public record Model<T>(T Value);
+            public class Container<T> { public record Model(T Value); }
+            public partial class Mapper<T> : IReadModelMapper<int, DbModel, {{projection}}>
+            {
+                public static IQueryable<{{projection}}> ProjectTo(IQueryable<DbModel> query) => throw new NotImplementedException();
+            }
+            """, "PANEFSG002");
+    }
+
+    [Fact(DisplayName = "Sorting generator ignores abstract mappers and unrelated contracts")]
+    public void Generate_IgnoresUnrelatedTypes()
+    {
+        var result = Generate("""
+            public interface IOther { }
+            public class Other : IOther { }
+            public interface IMore : IOther { }
+            public record Model;
+            public abstract class Mapper : IReadModelMapper<int, DbModel, Model>
+            {
+                public static IQueryable<Model> ProjectTo(IQueryable<DbModel> query) => throw new NotImplementedException();
+                public static IQueryable<Model> ApplySorting(IQueryable<Model> query, SortingParameters sortingParameters) => query;
+            }
+            """);
+
+        result.GeneratedSources.Should().BeEmpty();
+    }
+
+    private static GeneratorRunResult Generate(string source, string? expectedDiagnostic = null, MetadataReference? additionalReference = null)
+    {
+        var syntax = CSharpSyntaxTree.ParseText("""
+            using System;
+            using System.Linq;
+            using System.Collections.Generic;
+            using PANiXiDA.Core.Application.Querying.Sorting;
+            using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read;
+
+            """ + source);
+        var dbModel = CSharpSyntaxTree.ParseText("public class DbModel : PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Models.ReadDbModel<int> { }");
+        var references = additionalReference is null ? References : References.Add(additionalReference);
+        var compilation = CSharpCompilation.Create("SortingConsumer", [syntax, dbModel], references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SortingGenerator());
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
+
+        if (expectedDiagnostic is null)
+        {
+            diagnostics.Should().BeEmpty();
+            output.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
+        }
+        else
+        {
+            diagnostics.Should().ContainSingle(diagnostic => diagnostic.Id == expectedDiagnostic);
+        }
+
+        return driver.GetRunResult().Results.Single();
+    }
+}

@@ -21,7 +21,7 @@ internal sealed class ExposedReadRepository(WritableReadDbContext dbContext)
     public Task<PaginationResult<ProductReadModel>> GetProductsPageAsync(
         IQueryable<ProductReadDbModel> query,
         PaginationParameters paginationParameters,
-        SortParameters sortParameters)
+        SortingParameters sortParameters)
     {
         return GetPagedResultAsync<ProductReadModel, ProductReadModelMapper>(
             query,
@@ -37,11 +37,11 @@ internal sealed class ExposedReadRepository(WritableReadDbContext dbContext)
         return ApplyPagination(query, paginationParameters);
     }
 
-    public IQueryable<ProductReadDbModel> ApplySortForTest(
+    public IQueryable<ProductReadModel> ApplySortForTest(
         IQueryable<ProductReadDbModel> query,
-        SortParameters sortParameters)
+        SortingParameters sortParameters)
     {
-        return ApplySort(query, sortParameters);
+        return ProductReadModelMapper.ApplySorting(ProductReadModelMapper.ProjectTo(query), sortParameters);
     }
 
     public static Task<CursorPaginationResult<ProductReadDbModel>> GetCursorPageAsync(
@@ -57,4 +57,11 @@ internal sealed class ExposedReadRepository(WritableReadDbContext dbContext)
     }
 
     public IQueryable<ProductReadDbModel> Products => Query;
+
+    public Task<PaginationResult<TReadModel>> GetProjectionPageAsync<TReadModel, TMapper>(
+        PaginationParameters pagination, SortingParameters sorting)
+        where TMapper : IReadModelMapper<int, ProductReadDbModel, TReadModel>
+    {
+        return GetPagedResultAsync<TReadModel, TMapper>(Query, pagination, sorting, TestContext.Current.CancellationToken);
+    }
 }

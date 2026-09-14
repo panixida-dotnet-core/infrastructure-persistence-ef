@@ -16,6 +16,7 @@
     <File Path="version.json" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="src/PANiXiDA.Core.Infrastructure.Persistence.Ef.Generators/PANiXiDA.Core.Infrastructure.Persistence.Ef.Generators.csproj" />
     <Project Path="src/PANiXiDA.Core.Infrastructure.Persistence.Ef/PANiXiDA.Core.Infrastructure.Persistence.Ef.csproj" />
   </Folder>
   <Folder Name="/tests/">

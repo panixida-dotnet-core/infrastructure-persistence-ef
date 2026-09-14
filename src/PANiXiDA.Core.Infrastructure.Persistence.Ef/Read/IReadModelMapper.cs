@@ -1,5 +1,7 @@
 ﻿using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Models;
 
+using PANiXiDA.Core.Application.Querying.Sorting;
+
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Read;
 
 /// <summary>
@@ -18,4 +20,12 @@ public interface IReadModelMapper<TId, TDbReadModel, TReadModel>
     /// <param name="query">The database read model query to project.</param>
     /// <returns>The projected read model query.</returns>
     static abstract IQueryable<TReadModel> ProjectTo(IQueryable<TDbReadModel> query);
+
+    /// <summary>
+    /// Applies sorting to the projected read model query using generated property selectors.
+    /// </summary>
+    /// <param name="query">The projected query to sort.</param>
+    /// <param name="sortingParameters">Validated sorting criteria in their order of precedence.</param>
+    /// <returns>The sorted query, or the original query when no criteria are supplied.</returns>
+    static abstract IQueryable<TReadModel> ApplySorting(IQueryable<TReadModel> query, SortingParameters sortingParameters);
 }

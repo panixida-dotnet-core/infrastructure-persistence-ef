@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/dotnet/Nerdbank.GitVersioning/main/src/NerdBank.GitVersioning/version.schema.json",
-  "version": "3.0",
+  "version": "4.0",
   "publicReleaseRefSpec": [
     "^refs/heads/main$",
     "^refs/heads/master$"
@@ -11,6 +11,7 @@
     }
   },
   "pathFilters": [
+    ":/src/PANiXiDA.Core.Infrastructure.Persistence.Ef.Generators/",
     ":/src/PANiXiDA.Core.Infrastructure.Persistence.Ef/",
     ":/Directory.Build.props",
     ":/Directory.Build.targets",
