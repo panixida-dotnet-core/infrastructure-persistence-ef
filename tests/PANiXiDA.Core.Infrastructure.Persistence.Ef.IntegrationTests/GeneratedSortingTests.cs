@@ -27,7 +27,7 @@ public sealed class GeneratedSortingTests(PostgreSqlContainerFixture fixture)
         result.TotalCount.Should().Be(4);
         result.TotalPages.Should().Be(4);
         var sql = ProductViewMapper.ApplySorting(ProductViewMapper.ProjectTo(repository.Products), sorting).Skip(1).Take(1).ToQueryString();
-        sql.Should().Contain("ORDER BY", "upper(", "DESC", "LIMIT", "OFFSET");
+        sql.Should().ContainAll("ORDER BY", "upper(", "DESC", "LIMIT", "OFFSET");
     }
 
     [Theory(DisplayName = "Generated sorting orders optional navigation fields in PostgreSQL")]
@@ -42,7 +42,7 @@ public sealed class GeneratedSortingTests(PostgreSqlContainerFixture fixture)
         var items = await query.ToListAsync(TestContext.Current.CancellationToken);
 
         items.Select(item => item.Label).Should().Equal(expected.Split(','));
-        query.ToQueryString().Should().Contain("LEFT JOIN", "ORDER BY");
+        query.ToQueryString().Should().ContainAll("LEFT JOIN", "ORDER BY");
     }
 
     [Fact(DisplayName = "Generated sorting handles nullable nested objects without changing key types")]

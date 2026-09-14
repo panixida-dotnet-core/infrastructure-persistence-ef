@@ -51,7 +51,7 @@ public sealed class SortingGeneratorTests
         var result = Generate(source);
 
         var generated = result.GeneratedSources.Should().ContainSingle().Subject.SourceText.ToString();
-        generated.Should().Contain("item.@Department.@Name", "item.@Department == null", "default(int?)", "item.@Detail.Value.@Date", "item.@Other.@Rank", "item.@Inherited");
+        generated.Should().ContainAll("item.@Department.@Name", "item.@Department == null", "default(int?)", "item.@Detail.Value.@Date", "item.@Other.@Rank", "item.@Inherited");
         generated.Should().NotContain("item.@Collection").And.NotContain("item.@Array").And.NotContain("item.@Object")
             .And.NotContain("item.@Type")
             .And.NotContain("item.@Pointer")
@@ -82,7 +82,7 @@ public sealed class SortingGeneratorTests
             }
             """);
 
-        result.GeneratedSources.Should().ContainSingle().Subject.SourceText.ToString().Should().Contain("item.@Value", "item.@Optional");
+        result.GeneratedSources.Should().ContainSingle().Subject.SourceText.ToString().Should().ContainAll("item.@Value", "item.@Optional");
     }
 
     [Theory(DisplayName = "Sorting generator reports unsupported mapper declarations")]
@@ -189,7 +189,7 @@ public sealed class SortingGeneratorTests
             }
             """, additionalReference: MetadataReference.CreateFromImage(stream.ToArray()));
 
-        result.GeneratedSources.Should().ContainSingle().Subject.SourceText.ToString().Should().Contain("item.@Value", "item.@Department.@Rank", "item.@Department.@Name");
+        result.GeneratedSources.Should().ContainSingle().Subject.SourceText.ToString().Should().ContainAll("item.@Value", "item.@Department.@Rank", "item.@Department.@Name");
     }
 
     [Theory(DisplayName = "Sorting generator rejects open generic projections")]

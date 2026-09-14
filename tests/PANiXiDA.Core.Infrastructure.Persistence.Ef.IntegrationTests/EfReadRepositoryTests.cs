@@ -136,7 +136,7 @@ public sealed class EfReadRepositoryTests(PostgreSqlContainerFixture fixture)
         await SeedProductsAsync(context);
         var repository = new ExposedReadRepository(context);
 
-        var ids = await repository.ApplySortForTest(
+        var ids = await ExposedReadRepository.ApplySortForTest(
                 repository.Products.OrderByDescending(item => item.Id),
                 SortingParameters.None)
             .Select(item => item.Id)
@@ -152,7 +152,7 @@ public sealed class EfReadRepositoryTests(PostgreSqlContainerFixture fixture)
         await SeedProductsAsync(context);
         var repository = new ExposedReadRepository(context);
 
-        var ids = await repository.ApplySortForTest(
+        var ids = await ExposedReadRepository.ApplySortForTest(
                 repository.Products,
                 SortingParameters.Ascending("id"))
             .Select(item => item.Id)
@@ -182,7 +182,7 @@ public sealed class EfReadRepositoryTests(PostgreSqlContainerFixture fixture)
 
         var repository = new ExposedReadRepository(context);
 
-        var ids = await repository.ApplySortForTest(
+        var ids = await ExposedReadRepository.ApplySortForTest(
                 repository.Products,
                 SortingParameters.Ascending(nameof(ProductReadModel.Name)).WithDefault(SortingParameters.Descending(nameof(ProductReadModel.Id))))
             .Select(item => item.Id)

@@ -37,7 +37,7 @@ internal sealed class ExposedReadRepository(WritableReadDbContext dbContext)
         return ApplyPagination(query, paginationParameters);
     }
 
-    public IQueryable<ProductReadModel> ApplySortForTest(
+    public static IQueryable<ProductReadModel> ApplySortForTest(
         IQueryable<ProductReadDbModel> query,
         SortingParameters sortParameters)
     {
