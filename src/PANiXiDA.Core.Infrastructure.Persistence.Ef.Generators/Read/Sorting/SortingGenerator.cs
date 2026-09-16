@@ -8,19 +8,19 @@ using Microsoft.CodeAnalysis.Text;
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Generators.Read.Sorting;
 
 /// <summary>
-/// Generates typed sorting selectors for the projected models of read model mappers.
+/// Generates typed sorting selectors for the projected models of read model sorting classes.
 /// </summary>
 [Generator(LanguageNames.CSharp)]
 public sealed class SortingGenerator : IIncrementalGenerator
 {
-    private static readonly DiagnosticDescriptor PartialMapper = new(
-        "PANEFSG001", "Sorting requires a partial mapper",
-        "Mapper '{0}' and its containing types must be partial to generate sorting",
+    private static readonly DiagnosticDescriptor PartialSorting = new(
+        "PANEFSG001", "Sorting requires a partial sorting class",
+        "Sorting type '{0}' and its containing types must be partial to generate sorting",
         "Sorting", DiagnosticSeverity.Error, true);
 
     private static readonly DiagnosticDescriptor ConcreteModel = new(
         "PANEFSG002", "Sorting requires a concrete projection",
-        "Mapper '{0}' must implement exactly one IReadModelMapper contract with a concrete projected model",
+        "Sorting type '{0}' must implement exactly one IReadModelSorting contract with a concrete projected model",
         "Sorting", DiagnosticSeverity.Error, true);
 
     private static readonly DiagnosticDescriptor FieldCollision = new(
@@ -29,14 +29,14 @@ public sealed class SortingGenerator : IIncrementalGenerator
         "Sorting", DiagnosticSeverity.Error, true);
 
     /// <summary>
-    /// Registers generation for read model mappers declared in the consuming project.
+    /// Registers generation for read model sorting classes declared in the consuming project.
     /// </summary>
     /// <param name="context">The generator initialization context.</param>
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var contract = context.CompilationProvider.Select(static (compilation, _) =>
-            compilation.GetTypeByMetadataName("PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.IReadModelMapper`3"));
-        var mappers = context.SyntaxProvider.CreateSyntaxProvider(
+            compilation.GetTypeByMetadataName("PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Sorting.IReadModelSorting`1"));
+        var sortingTypes = context.SyntaxProvider.CreateSyntaxProvider(
                 static (node, _) => node is TypeDeclarationSyntax { BaseList: not null },
                 static (syntax, token) => syntax.SemanticModel.GetDeclaredSymbol(syntax.Node, token) as INamedTypeSymbol)
             .Combine(contract)
@@ -44,7 +44,7 @@ public sealed class SortingGenerator : IIncrementalGenerator
                 && pair.Right is not null && pair.Left.AllInterfaces.Any(type => SymbolEqualityComparer.Default.Equals(type.OriginalDefinition, pair.Right)))
             .Collect();
 
-        context.RegisterSourceOutput(mappers, static (output, candidates) => Generate(output, candidates));
+        context.RegisterSourceOutput(sortingTypes, static (output, candidates) => Generate(output, candidates));
     }
 
     private static void Generate(SourceProductionContext context, ImmutableArray<(INamedTypeSymbol? Left, INamedTypeSymbol? Right)> candidates)
@@ -52,30 +52,30 @@ public sealed class SortingGenerator : IIncrementalGenerator
         var seen = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
         foreach (var (candidate, contract) in candidates)
         {
-            var mapper = candidate!;
-            if (!seen.Add(mapper))
+            var sortingType = candidate!;
+            if (!seen.Add(sortingType))
             {
                 continue;
             }
 
-            var contracts = mapper.AllInterfaces.Where(type => SymbolEqualityComparer.Default.Equals(type.OriginalDefinition, contract)).ToArray();
-            if (contracts.Length == 1 && mapper.FindImplementationForInterfaceMember(contracts[0].GetMembers("ApplySorting").Single()) is not null)
+            var contracts = sortingType.AllInterfaces.Where(type => SymbolEqualityComparer.Default.Equals(type.OriginalDefinition, contract)).ToArray();
+            if (contracts.Length == 1 && sortingType.FindImplementationForInterfaceMember(contracts[0].GetMembers("ApplySorting").Single()) is not null)
             {
                 continue;
             }
 
-            if (contracts.Length != 1 || contracts[0].TypeArguments[2] is not INamedTypeSymbol model || ContainsTypeParameter(model))
+            if (contracts.Length != 1 || contracts[0].TypeArguments[0] is not INamedTypeSymbol model || ContainsTypeParameter(model))
             {
-                context.ReportDiagnostic(Diagnostic.Create(ConcreteModel, mapper.Locations[0], mapper.ToDisplayString()));
+                context.ReportDiagnostic(Diagnostic.Create(ConcreteModel, sortingType.Locations[0], sortingType.ToDisplayString()));
                 continue;
             }
 
-            var containers = ContainingTypes(mapper).Reverse().ToArray();
+            var containers = ContainingTypes(sortingType).Reverse().ToArray();
             if (containers.Any(type => type.DeclaringSyntaxReferences.Any(reference =>
                 reference.GetSyntax(context.CancellationToken) is not TypeDeclarationSyntax declaration
                 || !declaration.Modifiers.Any(SyntaxKind.PartialKeyword) || declaration.Modifiers.Any(SyntaxKind.FileKeyword))))
             {
-                context.ReportDiagnostic(Diagnostic.Create(PartialMapper, mapper.Locations[0], mapper.ToDisplayString()));
+                context.ReportDiagnostic(Diagnostic.Create(PartialSorting, sortingType.Locations[0], sortingType.ToDisplayString()));
                 continue;
             }
 
@@ -84,29 +84,30 @@ public sealed class SortingGenerator : IIncrementalGenerator
             var collision = paths.GroupBy(path => path.Path, StringComparer.OrdinalIgnoreCase).FirstOrDefault(group => group.Count() > 1);
             if (collision is not null)
             {
-                context.ReportDiagnostic(Diagnostic.Create(FieldCollision, mapper.Locations[0], model.ToDisplayString(), string.Join(", ", collision.Select(path => path.Path))));
+                context.ReportDiagnostic(Diagnostic.Create(FieldCollision, sortingType.Locations[0], model.ToDisplayString(), string.Join(", ", collision.Select(path => path.Path))));
                 continue;
             }
 
-            var source = BuildSource(mapper, model, containers, paths);
-            var hintName = (mapper.ContainingNamespace.IsGlobalNamespace ? "" : mapper.ContainingNamespace.ToDisplayString() + ".")
+            var source = BuildSource(sortingType, model, containers, paths);
+            var hintName = (sortingType.ContainingNamespace.IsGlobalNamespace ? "" : sortingType.ContainingNamespace.ToDisplayString() + ".")
                 + string.Join("_", containers.Select(type => type.MetadataName)) + ".Sorting.g.cs";
             context.AddSource(hintName, SourceText.From(source, Encoding.UTF8));
         }
     }
 
-    private static string BuildSource(INamedTypeSymbol mapper, INamedTypeSymbol model, INamedTypeSymbol[] containers,
+    private static string BuildSource(INamedTypeSymbol sortingType, INamedTypeSymbol model, INamedTypeSymbol[] containers,
         List<(string Path, string Selector)> paths)
     {
         var modelName = model.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         var queryType = $"global::System.Linq.IQueryable<{modelName}>";
         var orderedType = $"global::System.Linq.IOrderedQueryable<{modelName}>";
-        const string sortingType = "global::PANiXiDA.Core.Application.Querying.Sorting.SortingParameters";
+        const string parametersType = "global::PANiXiDA.Core.Application.Querying.Sorting.SortingParameters";
         const string directionType = "global::PANiXiDA.Core.Application.Querying.Sorting.SortDirection";
+        var sortingTypeName = sortingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         var source = new StringBuilder("#nullable enable\n");
-        if (!mapper.ContainingNamespace.IsGlobalNamespace)
+        if (!sortingType.ContainingNamespace.IsGlobalNamespace)
         {
-            source.Append("namespace ").Append(mapper.ContainingNamespace.ToDisplayString()).AppendLine(";");
+            source.Append("namespace ").Append(sortingType.ContainingNamespace.ToDisplayString()).AppendLine(";");
         }
 
         foreach (var type in containers)
@@ -124,16 +125,23 @@ public sealed class SortingGenerator : IIncrementalGenerator
         source.AppendLine("/// <summary>Applies sorting by the projected model's scalar property paths without runtime member discovery.</summary>")
             .AppendLine("/// <param name=\"query\">The projected query to sort.</param>")
             .AppendLine("/// <param name=\"sortingParameters\">Validated sorting criteria in their order of precedence.</param>")
-            .AppendLine("/// <returns>The sorted query, or the original query when sorting is empty.</returns>")
-            .Append("public static ").Append(queryType).Append(" ApplySorting(").Append(queryType).Append(" query, ").Append(sortingType).AppendLine(" sortingParameters)")
+            .AppendLine("/// <returns>The query ordered by client criteria and remaining defaults, or unchanged when both are empty.</returns>")
+            .Append("public static ").Append(queryType).Append(" ApplySorting(").Append(queryType).Append(" query, ").Append(parametersType).AppendLine(" sortingParameters)")
             .AppendLine("{")
             .AppendLine("global::System.ArgumentNullException.ThrowIfNull(query);")
             .AppendLine("global::System.ArgumentNullException.ThrowIfNull(sortingParameters);")
             .AppendLine("global::System.ArgumentNullException.ThrowIfNull(sortingParameters.Fields);")
-            .Append(orderedType).AppendLine("? ordered = null;")
-            .AppendLine("foreach (var field in sortingParameters.Fields)")
+            .Append("var defaultSorting = GetDefaultSorting<").Append(sortingTypeName).AppendLine(">();")
+            .AppendLine("global::System.ArgumentNullException.ThrowIfNull(defaultSorting);")
+            .AppendLine("global::System.ArgumentNullException.ThrowIfNull(defaultSorting.Fields);")
+            .AppendLine("foreach (var field in global::System.Linq.Enumerable.Concat(sortingParameters.Fields, defaultSorting.Fields))")
             .AppendLine("{")
             .AppendLine("global::System.ArgumentNullException.ThrowIfNull(field);")
+            .AppendLine("}")
+            .AppendLine("var effectiveSorting = sortingParameters.WithDefault(defaultSorting);")
+            .Append(orderedType).AppendLine("? ordered = null;")
+            .AppendLine("foreach (var field in effectiveSorting.Fields)")
+            .AppendLine("{")
             .Append("if (field.Order is not (").Append(directionType).Append(".Asc or ").Append(directionType).AppendLine(".Desc))")
             .AppendLine("{")
             .AppendLine("throw new global::System.ArgumentOutOfRangeException(nameof(sortingParameters), field.Order, \"Unsupported sorting direction.\");")
@@ -150,7 +158,12 @@ public sealed class SortingGenerator : IIncrementalGenerator
 
         source.AppendLine("_ => throw new global::System.ArgumentException($\"Sorting field '{field.Field}' is not supported.\", nameof(sortingParameters))")
             .AppendLine("};\n}")
-            .AppendLine("return ordered ?? query;");
+            .AppendLine("return ordered ?? query;")
+            .Append("static ").Append(parametersType).AppendLine(" GetDefaultSorting<TSorting>()")
+            .Append("where TSorting : global::PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Sorting.IReadModelSorting<").Append(modelName).AppendLine(">")
+            .AppendLine("{")
+            .AppendLine("return TSorting.DefaultSorting;")
+            .AppendLine("}");
 
         if (paths.Count > 0)
         {

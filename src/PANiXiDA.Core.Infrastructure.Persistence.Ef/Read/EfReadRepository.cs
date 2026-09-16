@@ -6,6 +6,7 @@ using PANiXiDA.Core.Application.Querying.Pagination;
 using PANiXiDA.Core.Application.Querying.Sorting;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.DbContexts;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Models;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Sorting;
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Read;
 
@@ -62,20 +63,22 @@ public abstract class EfReadRepository
     /// </summary>
     /// <typeparam name="TReadModel">The projected read model type.</typeparam>
     /// <typeparam name="TReadModelMapper">The mapper used to project database read models.</typeparam>
+    /// <typeparam name="TReadModelSorting">The sorting implementation and defaults for the projected model.</typeparam>
     /// <param name="query">The query to paginate.</param>
     /// <param name="paginationParameters">The page-based pagination parameters.</param>
     /// <param name="sortingParameters">The sorting parameters.</param>
     /// <param name="cancellationToken">The token used to cancel the operation.</param>
     /// <returns>The paged projected read model result.</returns>
-    protected virtual async Task<PaginationResult<TReadModel>> GetPagedResultAsync<TReadModel, TReadModelMapper>(
+    protected virtual async Task<PaginationResult<TReadModel>> GetPagedResultAsync<TReadModel, TReadModelMapper, TReadModelSorting>(
         IQueryable<TReadDbModel> query,
         PaginationParameters paginationParameters,
         SortingParameters sortingParameters,
         CancellationToken cancellationToken)
         where TReadModelMapper : IReadModelMapper<TId, TReadDbModel, TReadModel>
+        where TReadModelSorting : IReadModelSorting<TReadModel>
     {
         var dtoQuery = TReadModelMapper.ProjectTo(query);
-        dtoQuery = TReadModelMapper.ApplySorting(dtoQuery, sortingParameters);
+        dtoQuery = TReadModelSorting.ApplySorting(dtoQuery, sortingParameters);
         var totalCount = await dtoQuery.LongCountAsync(cancellationToken);
 
         if (totalCount == 0)

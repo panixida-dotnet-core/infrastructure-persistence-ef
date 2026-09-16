@@ -7,6 +7,7 @@ using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.Infrastructur
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.ReadModels;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.Repositories;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Sorting;
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests;
 
@@ -18,15 +19,14 @@ public sealed class GeneratedSortingTests(PostgreSqlContainerFixture fixture)
     {
         await using var context = await CreateContextAsync();
         var repository = new ExposedReadRepository(context);
-        var sorting = SortingParameters.Descending("label")
-            .WithDefault(SortingParameters.Of(new SortField("LABEL"), new SortField(nameof(ProductView.Rank))));
+        var sortingParameters = SortingParameters.Descending("label");
 
-        var result = await repository.GetProjectionPageAsync<ProductView, ProductViewMapper>(new PaginationParameters(2, 1), sorting);
+        var result = await repository.GetProjectionPageAsync<ProductView, ProductViewMapper, ProductViewSorting>(new PaginationParameters(2, 1), sortingParameters);
 
         result.Items.Select(item => item.Rank).Should().Equal(2);
         result.TotalCount.Should().Be(4);
         result.TotalPages.Should().Be(4);
-        var sql = ProductViewMapper.ApplySorting(ProductViewMapper.ProjectTo(repository.Products), sorting).Skip(1).Take(1).ToQueryString();
+        var sql = ProductViewSorting.ApplySorting(ProductViewMapper.ProjectTo(repository.Products), sortingParameters).Skip(1).Take(1).ToQueryString();
         sql.Should().ContainAll("ORDER BY", "upper(", "DESC", "LIMIT", "OFFSET");
     }
 
@@ -37,7 +37,7 @@ public sealed class GeneratedSortingTests(PostgreSqlContainerFixture fixture)
     {
         await using var context = await CreateContextAsync();
         var repository = new ExposedReadRepository(context);
-        var query = ProductViewMapper.ApplySorting(ProductViewMapper.ProjectTo(repository.Products), SortingParameters.Ascending(field));
+        var query = ProductViewSorting.ApplySorting(ProductViewMapper.ProjectTo(repository.Products), SortingParameters.Ascending(field));
 
         var items = await query.ToListAsync(TestContext.Current.CancellationToken);
 
@@ -55,7 +55,7 @@ public sealed class GeneratedSortingTests(PostgreSqlContainerFixture fixture)
             new ProductView { Label = "high", Department = new DepartmentView { Rank = 2 } }
         }.AsQueryable();
 
-        var result = ProductViewMapper.ApplySorting(query, SortingParameters.Descending("department.rank")).ToArray();
+        var result = ProductViewSorting.ApplySorting(query, SortingParameters.Descending("department.rank")).ToArray();
 
         result.Select(item => item.Label).Should().Equal("high", "low", "none");
     }
@@ -66,7 +66,7 @@ public sealed class GeneratedSortingTests(PostgreSqlContainerFixture fixture)
         await using var context = await CreateContextAsync();
         var repository = new ExposedReadRepository(context);
 
-        var result = await repository.GetProjectionPageAsync<SummaryView, SummaryMapper>(
+        var result = await repository.GetProjectionPageAsync<SummaryView, SummaryMapper, SummaryViewSorting>(
             new PaginationParameters(1, 1), SortingParameters.Descending(nameof(SummaryView.Count)));
 
         result.TotalCount.Should().Be(3);
@@ -79,7 +79,7 @@ public sealed class GeneratedSortingTests(PostgreSqlContainerFixture fixture)
         await using var context = await CreateContextAsync();
         var repository = new ExposedReadRepository(context);
 
-        var result = await repository.GetProjectionPageAsync<LabelView, DistinctMapper>(
+        var result = await repository.GetProjectionPageAsync<LabelView, DistinctMapper, LabelViewSorting>(
             new PaginationParameters(2, 2), SortingParameters.Ascending(nameof(LabelView.Label)));
 
         result.TotalCount.Should().Be(3);
@@ -95,7 +95,7 @@ public sealed class GeneratedSortingTests(PostgreSqlContainerFixture fixture)
     {
         var query = Array.Empty<ProductView>().AsQueryable();
 
-        var action = () => ProductViewMapper.ApplySorting(query, SortingParameters.Of(new SortField(field, direction)));
+        var action = () => ProductViewSorting.ApplySorting(query, SortingParameters.Of(new SortField(field, direction)));
 
         action.Should().Throw<ArgumentException>();
     }
@@ -105,14 +105,57 @@ public sealed class GeneratedSortingTests(PostgreSqlContainerFixture fixture)
     {
         var query = Array.Empty<ProductView>().AsQueryable();
 
-        ProductViewMapper.ApplySorting(query, SortingParameters.None).Should().BeSameAs(query);
-        var missingQuery = () => ProductViewMapper.ApplySorting(null!, SortingParameters.None);
-        var missingSorting = () => ProductViewMapper.ApplySorting(query, null!);
-        var missingFields = () => ProductViewMapper.ApplySorting(query, new SortingParameters(null!));
-        var missingField = () => ProductViewMapper.ApplySorting(query, new SortingParameters([null!]));
+        NoDefaultProductViewSorting.ApplySorting(query, SortingParameters.None).Should().BeSameAs(query);
+        var missingQuery = () => ProductViewSorting.ApplySorting(null!, SortingParameters.None);
+        var missingSorting = () => ProductViewSorting.ApplySorting(query, null!);
+        var missingFields = () => ProductViewSorting.ApplySorting(query, new SortingParameters(null!));
+        var missingField = () => ProductViewSorting.ApplySorting(query, new SortingParameters([null!]));
 
         missingQuery.Should().Throw<ArgumentNullException>();
         missingSorting.Should().Throw<ArgumentNullException>();
+        missingFields.Should().Throw<ArgumentNullException>();
+        missingField.Should().Throw<ArgumentNullException>();
+    }
+
+    [Fact(DisplayName = "Sorting class defaults apply to both a page and an unpaginated list")]
+    public async Task Sorting_AppliesDefaultsToPageAndList()
+    {
+        await using var context = await CreateContextAsync();
+        var repository = new ExposedReadRepository(context);
+
+        var page = await repository.GetProjectionPageAsync<ProductView, ProductViewMapper, ProductViewSorting>(
+            new PaginationParameters(2, 1), SortingParameters.None);
+        var items = await repository.GetProjectionListAsync<ProductView, ProductViewMapper, ProductViewSorting>(SortingParameters.None);
+
+        page.Items.Select(item => item.Rank).Should().Equal(3);
+        items.Select(item => item.Rank).Should().Equal(1, 3, 2, 4);
+    }
+
+    [Fact(DisplayName = "Sorting appends defaults after client criteria without modifying either input")]
+    public async Task Sorting_AppendsDefaultsWithoutMutatingInputs()
+    {
+        await using var context = await CreateContextAsync();
+        var repository = new ExposedReadRepository(context);
+        var sortingParameters = SortingParameters.Descending("department.rank");
+        var defaults = ProductViewSorting.DefaultSorting.Fields.ToArray();
+
+        var items = await repository.GetProjectionListAsync<ProductView, ProductViewMapper, ProductViewSorting>(sortingParameters);
+
+        items.Select(item => item.Rank).Should().Equal(4, 1, 3, 2);
+        sortingParameters.Fields.Should().Equal(new SortField("department.rank", SortDirection.Desc));
+        ProductViewSorting.DefaultSorting.Fields.Should().Equal(defaults);
+    }
+
+    [Fact(DisplayName = "Sorting rejects null default parameters, arrays, and criteria")]
+    public void Sorting_RejectsNullDefaults()
+    {
+        var query = Array.Empty<ProductView>().AsQueryable();
+
+        var missingDefaults = () => NullDefaultSorting.ApplySorting(query, SortingParameters.None);
+        var missingFields = () => NullDefaultFieldsSorting.ApplySorting(query, SortingParameters.None);
+        var missingField = () => NullDefaultFieldSorting.ApplySorting(query, SortingParameters.None);
+
+        missingDefaults.Should().Throw<ArgumentNullException>();
         missingFields.Should().Throw<ArgumentNullException>();
         missingField.Should().Throw<ArgumentNullException>();
     }
@@ -145,7 +188,7 @@ internal sealed record DepartmentView
     public int Rank { get; init; }
 }
 
-internal sealed partial class ProductViewMapper : IReadModelMapper<int, ProductReadDbModel, ProductView>
+internal sealed class ProductViewMapper : IReadModelMapper<int, ProductReadDbModel, ProductView>
 {
     public static IQueryable<ProductView> ProjectTo(IQueryable<ProductReadDbModel> query)
     {
@@ -164,7 +207,7 @@ internal sealed record SummaryView : IReadModel
     public int Count { get; init; }
 }
 
-internal sealed partial class SummaryMapper : IReadModelMapper<int, ProductReadDbModel, SummaryView>
+internal sealed class SummaryMapper : IReadModelMapper<int, ProductReadDbModel, SummaryView>
 {
     public static IQueryable<SummaryView> ProjectTo(IQueryable<ProductReadDbModel> query)
     {
@@ -177,10 +220,46 @@ internal sealed record LabelView : IReadModel
     public required string Label { get; init; }
 }
 
-internal sealed partial class DistinctMapper : IReadModelMapper<int, ProductReadDbModel, LabelView>
+internal sealed class DistinctMapper : IReadModelMapper<int, ProductReadDbModel, LabelView>
 {
     public static IQueryable<LabelView> ProjectTo(IQueryable<ProductReadDbModel> query)
     {
         return query.Select(item => new LabelView { Label = item.Name }).Distinct();
     }
+}
+
+internal sealed partial class ProductViewSorting : IReadModelSorting<ProductView>
+{
+    public static SortingParameters DefaultSorting { get; } =
+        SortingParameters.Of(new SortField("LABEL"), new SortField(nameof(ProductView.Rank)));
+}
+
+internal sealed partial class NoDefaultProductViewSorting : IReadModelSorting<ProductView>
+{
+    public static SortingParameters DefaultSorting { get; } = SortingParameters.None;
+}
+
+internal sealed partial class SummaryViewSorting : IReadModelSorting<SummaryView>
+{
+    public static SortingParameters DefaultSorting { get; } = SortingParameters.Ascending(nameof(SummaryView.Label));
+}
+
+internal sealed partial class LabelViewSorting : IReadModelSorting<LabelView>
+{
+    public static SortingParameters DefaultSorting { get; } = SortingParameters.Ascending(nameof(LabelView.Label));
+}
+
+internal sealed partial class NullDefaultSorting : IReadModelSorting<ProductView>
+{
+    public static SortingParameters DefaultSorting { get; } = null!;
+}
+
+internal sealed partial class NullDefaultFieldsSorting : IReadModelSorting<ProductView>
+{
+    public static SortingParameters DefaultSorting { get; } = new(null!);
+}
+
+internal sealed partial class NullDefaultFieldSorting : IReadModelSorting<ProductView>
+{
+    public static SortingParameters DefaultSorting { get; } = new([null!]);
 }

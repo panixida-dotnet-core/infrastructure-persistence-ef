@@ -180,7 +180,9 @@ public sealed class OrderRepository(
 ```csharp
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Models;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Sorting;
 using PANiXiDA.Core.Application.Querying;
+using PANiXiDA.Core.Application.Querying.Sorting;
 
 public sealed class OrderReadDbModel : AuditableReadDbModel<Guid>
 {
@@ -193,7 +195,7 @@ public sealed record OrderReadModel : IReadModel
     public required string Number { get; init; }
 }
 
-public sealed partial class OrderReadModelMapper
+public sealed class OrderReadModelMapper
     : IReadModelMapper<Guid, OrderReadDbModel, OrderReadModel>
 {
     public static IQueryable<OrderReadModel> ProjectTo(IQueryable<OrderReadDbModel> query)
@@ -201,11 +203,17 @@ public sealed partial class OrderReadModelMapper
         return query.Select(order => new OrderReadModel { Id = order.Id, Number = order.Number });
     }
 }
+
+public sealed partial class OrderReadModelSorting : IReadModelSorting<OrderReadModel>
+{
+    public static SortingParameters DefaultSorting { get; } =
+        SortingParameters.Ascending(nameof(OrderReadModel.Number));
+}
 ```
 
 Concrete `ReadDbModel<TId>` types in the read DbContext assembly are registered automatically. By default they are mapped as no-tracking models and excluded from migrations, which is useful when read models point to tables or views owned by another context.
 
-The package generates `ApplySorting` for partial mappers from the projected model's public scalar properties, including nested paths such as `department.name`. No sorting attributes or field mappings are required. CLR and camelCase paths are matched ignoring case.
+The package generates `ApplySorting` for partial `IReadModelSorting<TReadModel>` implementations from public scalar properties, including nested paths such as `department.name`. CLR and camelCase paths are matched ignoring case. `DefaultSorting` is required; use `SortingParameters.None` for no defaults. Client criteria take precedence, and missing default fields are appended automatically.
 
 Use property initializers in SQL projections as above: EF Core cannot translate ordering by properties populated only through a DTO constructor. Sorting and pagination run after projection; counts also use the projected query, including supported `GroupBy` and `Distinct` projections.
 
@@ -223,7 +231,7 @@ public interface IOrderReadRepository : IReadRepository<Guid>
 
     Task<PaginationResult<OrderReadModel>> GetPageAsync(
         PaginationParameters pagination,
-        SortingParameters sort,
+        SortingParameters sortingParameters,
         CancellationToken cancellationToken);
 }
 
@@ -237,19 +245,27 @@ public sealed class OrderReadRepository(AppReadDbContext dbContext)
 
     public Task<PaginationResult<OrderReadModel>> GetPageAsync(
         PaginationParameters pagination,
-        SortingParameters sort,
+        SortingParameters sortingParameters,
         CancellationToken cancellationToken)
     {
-        return GetPagedResultAsync<OrderReadModel, OrderReadModelMapper>(
+        return GetPagedResultAsync<OrderReadModel, OrderReadModelMapper, OrderReadModelSorting>(
             Query,
             pagination,
-            sort,
+            sortingParameters,
             cancellationToken);
     }
 }
 ```
 
-Sorting is optional and adds no implicit `Id` criterion. To append defaults while preserving client overrides, pass `sort.WithDefault(SortingParameters.Ascending(nameof(OrderReadModel.Number)))`. Validate requests with the Application-generated `OrderReadModelSortingValidator`.
+For an unpaginated list, the same sorting class applies its defaults:
+
+```csharp
+var query = OrderReadModelMapper.ProjectTo(Query);
+query = OrderReadModelSorting.ApplySorting(query, sortingParameters);
+var items = await query.ToListAsync(cancellationToken);
+```
+
+No implicit `Id` criterion is added. Validate requests with the Application-generated `OrderReadModelSortingValidator`.
 
 ## Behavior Notes
 
