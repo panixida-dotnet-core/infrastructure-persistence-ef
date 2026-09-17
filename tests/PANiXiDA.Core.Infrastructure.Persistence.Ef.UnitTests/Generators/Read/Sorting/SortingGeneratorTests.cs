@@ -55,8 +55,29 @@ public sealed class SortingGeneratorTests
         generated.Should().NotContain("item.@Collection").And.NotContain("item.@Array").And.NotContain("item.@Object")
             .And.NotContain("item.@Type")
             .And.NotContain("item.@Pointer")
-            .And.NotContain("item.@Static").And.NotContain("item.@Private").And.NotContain("item.@WriteOnly").And.NotContain(".@Parent");
+            .And.NotContain("item.@Static").And.NotContain("item.@Private").And.NotContain("item.@WriteOnly").And.NotContain(".@Parent.@Department");
+        generated.Should().ContainAll("item.@Department.@Parent.@Name", "item.@Other.@Parent.@Inherited");
         generated.Should().NotContain("System.Reflection").And.NotContain("MakeGenericMethod").And.NotContain(".Compile(");
+    }
+
+    [Fact(DisplayName = "Sorting generator includes scalar fields at recursive boundaries and stops further descent")]
+    public void Generate_WhenPropertiesAreRecursive_StopsAtRepeatedTypeDefinitions()
+    {
+        var result = Generate("""
+            public record Node(string Name, Node? Parent);
+            public record Recursive<T>(string Name, Recursive<List<T>>? Next);
+            public record Model(string Name, Model? Parent, Model? Other, Node Node, Recursive<int> Recursive);
+            public partial class Sorting : IReadModelSorting<Model>
+            {
+                public static SortingParameters DefaultSorting { get; } = SortingParameters.None;
+            }
+            """);
+
+        var generated = result.GeneratedSources.Should().ContainSingle().Subject.SourceText.ToString();
+        generated.Should().ContainAll("\"Parent.Name\"", "\"Other.Name\"", "\"Node.Parent.Name\"", "\"Recursive.Next.Name\"",
+            "item.@Parent == null ? default(string?) : item.@Parent.@Name");
+        generated.Should().NotContain("\"Parent.Parent.Name\"").And.NotContain("\"Other.Parent.Name\"")
+            .And.NotContain("\"Node.Parent.Parent.Name\"").And.NotContain("\"Recursive.Next.Next.Name\"");
     }
 
     [Theory(DisplayName = "Sorting generator supports scalar types")]

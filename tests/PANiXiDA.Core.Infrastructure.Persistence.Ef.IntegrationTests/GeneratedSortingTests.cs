@@ -14,6 +14,38 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests;
 [Collection(PostgreSqlCollection.Name)]
 public sealed class GeneratedSortingTests(PostgreSqlContainerFixture fixture)
 {
+    [Theory(DisplayName = "Generated sorting translates self-referencing projection paths in PostgreSQL")]
+    [InlineData(SortDirection.Asc, "1,3,2,4")]
+    [InlineData(SortDirection.Desc, "4,2,1,3")]
+    public async Task Sorting_HandlesSelfReferencingProjection(SortDirection direction, string expected)
+    {
+        await using var context = await CreateContextAsync();
+        var repository = new ExposedReadRepository(context);
+        var query = repository.Products.Select(item => new EmployeeView(item.Name, item.Id,
+            item.Department == null ? null : new EmployeeView(item.Department.Name, item.Department.Rank, null)));
+
+        var sorted = EmployeeSorting.ApplySorting(query, SortingParameters.Of(new SortField("manager.name", direction)));
+        var items = await sorted.ToListAsync(TestContext.Current.CancellationToken);
+        var page = await sorted.Skip(1).Take(2).ToListAsync(TestContext.Current.CancellationToken);
+
+        items.Select(item => item.Rank).Should().Equal(expected.Split(',').Select(int.Parse));
+        page.Should().Equal(items.Skip(1).Take(2));
+        sorted.ToQueryString().Should().ContainAll("ORDER BY", "LEFT JOIN");
+    }
+
+    [Fact(DisplayName = "Self-referencing sorting handles null values and rejects paths beyond the recursive boundary")]
+    public void Sorting_HandlesSelfReferencingRows()
+    {
+        EmployeeView[] items = [new("B", 1, new("Z", 1, null)), new("C", 2, null), new("A", 3, new("A", 2, null))];
+        var query = items.AsQueryable();
+
+        var sorted = EmployeeSorting.ApplySorting(query, SortingParameters.Ascending("Manager.Name")).ToArray();
+        var unsupported = () => EmployeeSorting.ApplySorting(query, SortingParameters.Ascending("Manager.Manager.Name"));
+
+        sorted.Select(item => item.Rank).Should().Equal(2, 3, 1);
+        unsupported.Should().Throw<ArgumentException>();
+    }
+
     [Theory(DisplayName = "Generated sorting translates positional records and nested constructors in PostgreSQL")]
     [InlineData("label", SortDirection.Desc, "4,2,1,3")]
     [InlineData("department.name", SortDirection.Asc, "1,3,2,4")]
@@ -327,6 +359,13 @@ internal sealed record ProductView : IReadModel
     public required string Label { get; init; }
     public int Rank { get; init; }
     public DepartmentView? Department { get; init; }
+}
+
+internal sealed record EmployeeView(string Name, int Rank, EmployeeView? Manager) : IReadModel;
+
+internal sealed partial class EmployeeSorting : IReadModelSorting<EmployeeView>
+{
+    public static SortingParameters DefaultSorting { get; } = SortingParameters.Ascending(nameof(EmployeeView.Rank));
 }
 
 internal sealed record DepartmentView

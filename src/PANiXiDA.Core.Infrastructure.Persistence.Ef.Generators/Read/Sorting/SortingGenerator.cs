@@ -220,10 +220,7 @@ public sealed class SortingGenerator : IIncrementalGenerator
     private static void CollectPaths(INamedTypeSymbol model, string prefix, string access, List<string> guards,
         HashSet<INamedTypeSymbol> ancestors, (HashSet<INamedTypeSymbol> Models, List<(string Path, string Selector)> Paths) projection, CancellationToken cancellationToken)
     {
-        if (!ancestors.Add(model.OriginalDefinition))
-        {
-            return;
-        }
+        var canDescend = ancestors.Add(model.OriginalDefinition);
 
         projection.Models.Add(model);
         foreach (var property in Properties(model))
@@ -234,14 +231,18 @@ public sealed class SortingGenerator : IIncrementalGenerator
                 continue;
             }
 
-            CollectPropertyPath(property, prefix, access, guards, ancestors, projection, cancellationToken);
+            CollectPropertyPath(property, prefix, access, guards, (ancestors, canDescend), projection, cancellationToken);
         }
 
-        ancestors.Remove(model.OriginalDefinition);
+        if (canDescend)
+        {
+            ancestors.Remove(model.OriginalDefinition);
+        }
     }
 
     private static void CollectPropertyPath(IPropertySymbol property, string prefix, string access, List<string> guards,
-        HashSet<INamedTypeSymbol> ancestors, (HashSet<INamedTypeSymbol> Models, List<(string Path, string Selector)> Paths) projection, CancellationToken cancellationToken)
+        (HashSet<INamedTypeSymbol> Ancestors, bool CanDescend) traversal,
+        (HashSet<INamedTypeSymbol> Models, List<(string Path, string Selector)> Paths) projection, CancellationToken cancellationToken)
     {
         var type = property.Type;
         var nullable = type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T };
@@ -261,7 +262,7 @@ public sealed class SortingGenerator : IIncrementalGenerator
             return;
         }
 
-        if (type is not INamedTypeSymbol nested)
+        if (!traversal.CanDescend || type is not INamedTypeSymbol nested)
         {
             return;
         }
@@ -277,7 +278,7 @@ public sealed class SortingGenerator : IIncrementalGenerator
                 nestedGuards.Add(propertyAccess + " == null");
             }
 
-            CollectPaths(nested, path + ".", propertyAccess + (nullable ? ".Value" : ""), nestedGuards, ancestors, projection, cancellationToken);
+            CollectPaths(nested, path + ".", propertyAccess + (nullable ? ".Value" : ""), nestedGuards, traversal.Ancestors, projection, cancellationToken);
         }
     }
 
