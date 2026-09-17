@@ -80,7 +80,8 @@ public sealed class SortingGenerator : IIncrementalGenerator
             }
 
             var paths = new List<(string Path, string Selector)>();
-            CollectPaths(model, "", "item", [], new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default), paths, context.CancellationToken);
+            var models = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+            CollectPaths(model, "", "item", [], new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default), (models, paths), context.CancellationToken);
             var collision = paths.GroupBy(path => path.Path, StringComparer.OrdinalIgnoreCase).FirstOrDefault(group => group.Count() > 1);
             if (collision is not null)
             {
@@ -88,7 +89,7 @@ public sealed class SortingGenerator : IIncrementalGenerator
                 continue;
             }
 
-            var source = BuildSource(sortingType, model, containers, paths);
+            var source = BuildSource(sortingType, model, containers, paths, ConstructorProjection.Build(models));
             var hintName = (sortingType.ContainingNamespace.IsGlobalNamespace ? "" : sortingType.ContainingNamespace.ToDisplayString() + ".")
                 + string.Join("_", containers.Select(type => type.MetadataName)) + ".Sorting.g.cs";
             context.AddSource(hintName, SourceText.From(source, Encoding.UTF8));
@@ -96,7 +97,7 @@ public sealed class SortingGenerator : IIncrementalGenerator
     }
 
     private static string BuildSource(INamedTypeSymbol sortingType, INamedTypeSymbol model, INamedTypeSymbol[] containers,
-        List<(string Path, string Selector)> paths)
+        List<(string Path, string Selector)> paths, string projectionRewriter)
     {
         var modelName = model.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         var queryType = $"global::System.Linq.IQueryable<{modelName}>";
@@ -138,8 +139,20 @@ public sealed class SortingGenerator : IIncrementalGenerator
             .AppendLine("{")
             .AppendLine("global::System.ArgumentNullException.ThrowIfNull(field);")
             .AppendLine("}")
-            .AppendLine("var effectiveSorting = sortingParameters.WithDefault(defaultSorting);")
-            .Append(orderedType).AppendLine("? ordered = null;")
+            .AppendLine("var effectiveSorting = sortingParameters.WithDefault(defaultSorting);");
+
+        if (projectionRewriter.Length > 0)
+        {
+            source.AppendLine("if (effectiveSorting.Fields.Length > 0)")
+                .AppendLine("{")
+                .AppendLine("var expression = new SortingProjectionRewriter().Visit(query.Expression);")
+                .AppendLine("if (!global::System.Object.ReferenceEquals(expression, query.Expression))")
+                .AppendLine("{")
+                .Append("query = query.Provider.CreateQuery<").Append(modelName).AppendLine(">(expression);")
+                .AppendLine("}\n}");
+        }
+
+        source.Append(orderedType).AppendLine("? ordered = null;")
             .AppendLine("foreach (var field in effectiveSorting.Fields)")
             .AppendLine("{")
             .Append("if (field.Order is not (").Append(directionType).Append(".Asc or ").Append(directionType).AppendLine(".Desc))")
@@ -184,6 +197,7 @@ public sealed class SortingGenerator : IIncrementalGenerator
         }
 
         source.AppendLine("}");
+        source.Append(projectionRewriter);
         foreach (var _ in containers)
         {
             source.AppendLine("}");
@@ -193,13 +207,14 @@ public sealed class SortingGenerator : IIncrementalGenerator
     }
 
     private static void CollectPaths(INamedTypeSymbol model, string prefix, string access, List<string> guards,
-        HashSet<INamedTypeSymbol> ancestors, List<(string Path, string Selector)> paths, CancellationToken cancellationToken)
+        HashSet<INamedTypeSymbol> ancestors, (HashSet<INamedTypeSymbol> Models, List<(string Path, string Selector)> Paths) projection, CancellationToken cancellationToken)
     {
         if (!ancestors.Add(model.OriginalDefinition))
         {
             return;
         }
 
+        projection.Models.Add(model);
         foreach (var property in Properties(model))
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -208,14 +223,14 @@ public sealed class SortingGenerator : IIncrementalGenerator
                 continue;
             }
 
-            CollectPropertyPath(property, prefix, access, guards, ancestors, paths, cancellationToken);
+            CollectPropertyPath(property, prefix, access, guards, ancestors, projection, cancellationToken);
         }
 
         ancestors.Remove(model.OriginalDefinition);
     }
 
     private static void CollectPropertyPath(IPropertySymbol property, string prefix, string access, List<string> guards,
-        HashSet<INamedTypeSymbol> ancestors, List<(string Path, string Selector)> paths, CancellationToken cancellationToken)
+        HashSet<INamedTypeSymbol> ancestors, (HashSet<INamedTypeSymbol> Models, List<(string Path, string Selector)> Paths) projection, CancellationToken cancellationToken)
     {
         var type = property.Type;
         var nullable = type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T };
@@ -231,7 +246,7 @@ public sealed class SortingGenerator : IIncrementalGenerator
             var resultType = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             var selector = guards.Count == 0 ? propertyAccess
                 : string.Join(" || ", guards) + " ? default(" + resultType + "?) : " + propertyAccess;
-            paths.Add((path, selector));
+            projection.Paths.Add((path, selector));
             return;
         }
 
@@ -251,11 +266,11 @@ public sealed class SortingGenerator : IIncrementalGenerator
                 nestedGuards.Add(propertyAccess + " == null");
             }
 
-            CollectPaths(nested, path + ".", propertyAccess + (nullable ? ".Value" : ""), nestedGuards, ancestors, paths, cancellationToken);
+            CollectPaths(nested, path + ".", propertyAccess + (nullable ? ".Value" : ""), nestedGuards, ancestors, projection, cancellationToken);
         }
     }
 
-    private static IEnumerable<IPropertySymbol> Properties(INamedTypeSymbol model)
+    internal static IEnumerable<IPropertySymbol> Properties(INamedTypeSymbol model)
     {
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var types = model.TypeKind == TypeKind.Interface ? new[] { model }.Concat(model.AllInterfaces) : BaseTypes(model);
@@ -271,7 +286,7 @@ public sealed class SortingGenerator : IIncrementalGenerator
         }
     }
 
-    private static IEnumerable<INamedTypeSymbol> BaseTypes(INamedTypeSymbol model)
+    internal static IEnumerable<INamedTypeSymbol> BaseTypes(INamedTypeSymbol model)
     {
         for (var type = model; type is not null; type = type.BaseType)
         {

@@ -189,18 +189,14 @@ public sealed class OrderReadDbModel : AuditableReadDbModel<Guid>
     public string Number { get; set; } = string.Empty;
 }
 
-public sealed record OrderReadModel : IReadModel
-{
-    public Guid Id { get; init; }
-    public required string Number { get; init; }
-}
+public sealed record OrderReadModel(Guid Id, string Number) : IReadModel;
 
 public sealed class OrderReadModelMapper
     : IReadModelMapper<Guid, OrderReadDbModel, OrderReadModel>
 {
     public static IQueryable<OrderReadModel> ProjectTo(IQueryable<OrderReadDbModel> query)
     {
-        return query.Select(order => new OrderReadModel { Id = order.Id, Number = order.Number });
+        return query.Select(order => new OrderReadModel(order.Id, order.Number));
     }
 }
 
@@ -215,7 +211,7 @@ Concrete `ReadDbModel<TId>` types in the read DbContext assembly are registered 
 
 The package generates `ApplySorting` for partial `IReadModelSorting<TReadModel>` implementations from public scalar properties, including nested paths such as `department.name`. CLR and camelCase paths are matched ignoring case. `DefaultSorting` is required; use `SortingParameters.None` for no defaults. Client criteria take precedence, and missing default fields are appended automatically.
 
-Use property initializers in SQL projections as above: EF Core cannot translate ordering by properties populated only through a DTO constructor. Sorting and pagination run after projection; counts also use the projected query, including supported `GroupBy` and `Distinct` projections.
+Positional records and property initializers are supported, including nested records. Sorting and pagination run after projection; counts also use the projected query, including supported `GroupBy` and `Distinct` projections.
 
 ### Read Repository
 

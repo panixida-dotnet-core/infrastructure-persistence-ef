@@ -14,6 +14,46 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests;
 [Collection(PostgreSqlCollection.Name)]
 public sealed class GeneratedSortingTests(PostgreSqlContainerFixture fixture)
 {
+    [Theory(DisplayName = "Generated sorting translates positional records and nested constructors in PostgreSQL")]
+    [InlineData("label", SortDirection.Desc, "4,2,1,3")]
+    [InlineData("department.name", SortDirection.Asc, "1,3,2,4")]
+    [InlineData("Department.Rank", SortDirection.Desc, "4,1,3,2")]
+    public async Task Sorting_UsesPositionalProjection(string field, SortDirection direction, string expected)
+    {
+        await using var context = await CreateContextAsync();
+        var repository = new ExposedReadRepository(context);
+        var sortingParameters = SortingParameters.Of(new SortField(field, direction));
+        var query = PositionalProductSorting.ApplySorting(PositionalProductMapper.ProjectTo(repository.Products), sortingParameters);
+
+        var items = await query.ToListAsync(TestContext.Current.CancellationToken);
+        var page = await repository.GetProjectionPageAsync<PositionalProductView, PositionalProductMapper, PositionalProductSorting>(
+            new PaginationParameters(2, 1), sortingParameters);
+
+        items.Select(item => item.Rank).Should().Equal(expected.Split(',').Select(int.Parse));
+        page.Items.Should().Equal(items.Skip(1).Take(1));
+        page.TotalCount.Should().Be(4);
+        query.ToQueryString().Should().ContainAll("ORDER BY", "upper(", "LEFT JOIN");
+    }
+
+    [Fact(DisplayName = "Positional sorting preserves explicit initializers and supports applying sorting again")]
+    public async Task Sorting_PreservesPositionalInitializers()
+    {
+        await using var context = await CreateContextAsync();
+        var repository = new ExposedReadRepository(context);
+        var query = repository.Products.Select(item => new PositionalProductView("unused", -1, null)
+        {
+            Label = item.Name,
+            Rank = item.Score / 10
+        });
+        var sorted = PositionalProductSorting.ApplySorting(query, SortingParameters.None);
+
+        var items = await PositionalProductSorting.ApplySorting(sorted, SortingParameters.Descending("rank"))
+            .ToListAsync(TestContext.Current.CancellationToken);
+
+        items.Select(item => item.Rank).Should().Equal(4, 3, 2, 1);
+        items.Select(item => item.Label).Should().Equal("Gamma", "Alpha", "Beta", "Alpha");
+    }
+
     [Fact(DisplayName = "Generated sorting uses projected and calculated fields before database pagination")]
     public async Task Sorting_UsesProjectionBeforePagination()
     {
@@ -70,7 +110,7 @@ public sealed class GeneratedSortingTests(PostgreSqlContainerFixture fixture)
             new PaginationParameters(1, 1), SortingParameters.Descending(nameof(SummaryView.Count)));
 
         result.TotalCount.Should().Be(3);
-        result.Items.Should().ContainSingle().Which.Should().Be(new SummaryView { Label = "Alpha", Count = 2 });
+        result.Items.Should().ContainSingle().Which.Should().Be(new SummaryView("Alpha", 2));
     }
 
     [Fact(DisplayName = "Distinct projections preserve projected count and require no identifier")]
@@ -201,30 +241,43 @@ internal sealed class ProductViewMapper : IReadModelMapper<int, ProductReadDbMod
     }
 }
 
-internal sealed record SummaryView : IReadModel
+internal sealed record PositionalProductView(string Label, int Rank, PositionalDepartmentView? Department) : IReadModel;
+
+internal sealed record PositionalDepartmentView(string Name, int Rank);
+
+internal sealed class PositionalProductMapper : IReadModelMapper<int, ProductReadDbModel, PositionalProductView>
 {
-    public required string Label { get; init; }
-    public int Count { get; init; }
+    public static IQueryable<PositionalProductView> ProjectTo(IQueryable<ProductReadDbModel> query)
+    {
+        return query.Select(item => new PositionalProductView(
+            item.Name.ToUpper(), item.Score / 10,
+            item.Department == null ? null : new PositionalDepartmentView(item.Department.Name, item.Department.Rank)));
+    }
 }
+
+internal sealed partial class PositionalProductSorting : IReadModelSorting<PositionalProductView>
+{
+    public static SortingParameters DefaultSorting { get; } =
+        SortingParameters.Of(new SortField(nameof(PositionalProductView.Label)), new SortField(nameof(PositionalProductView.Rank)));
+}
+
+internal sealed record SummaryView(string Label, int Count) : IReadModel;
 
 internal sealed class SummaryMapper : IReadModelMapper<int, ProductReadDbModel, SummaryView>
 {
     public static IQueryable<SummaryView> ProjectTo(IQueryable<ProductReadDbModel> query)
     {
-        return query.GroupBy(item => item.Name).Select(group => new SummaryView { Label = group.Key, Count = group.Count() });
+        return query.GroupBy(item => item.Name).Select(group => new SummaryView(group.Key, group.Count()));
     }
 }
 
-internal sealed record LabelView : IReadModel
-{
-    public required string Label { get; init; }
-}
+internal sealed record LabelView(string Label) : IReadModel;
 
 internal sealed class DistinctMapper : IReadModelMapper<int, ProductReadDbModel, LabelView>
 {
     public static IQueryable<LabelView> ProjectTo(IQueryable<ProductReadDbModel> query)
     {
-        return query.Select(item => new LabelView { Label = item.Name }).Distinct();
+        return query.Select(item => new LabelView(item.Name)).Distinct();
     }
 }
 

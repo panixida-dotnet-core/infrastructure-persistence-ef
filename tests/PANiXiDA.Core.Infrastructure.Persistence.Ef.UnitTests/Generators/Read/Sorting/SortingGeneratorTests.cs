@@ -85,6 +85,30 @@ public sealed class SortingGeneratorTests
         result.GeneratedSources.Should().ContainSingle().Subject.SourceText.ToString().Should().ContainAll("item.@Value", "item.@Optional");
     }
 
+    [Fact(DisplayName = "Sorting generator maps positional constructors using typed expressions without runtime discovery")]
+    public void Generate_MapsPositionalConstructors()
+    {
+        var result = Generate("""
+            public record Base { public required int Field; }
+            public record Model(string? Name, Detail? Detail) : Base
+            {
+                public required string Other { get; init; }
+                public Model(int number) : this(number.ToString(), null) { }
+            }
+            public readonly record struct Detail(int Rank);
+            public partial class Sorting : IReadModelSorting<Model>
+            {
+                public static SortingParameters DefaultSorting { get; } = SortingParameters.None;
+            }
+            """);
+
+        var generated = result.GeneratedSources.Should().ContainSingle().Subject.SourceText.ToString();
+        generated.Should().ContainAll("SortingProjectionRewriter", "new global::Model(", "new global::Detail(", "@Other = default!", "@Field = default!");
+        generated.Should().NotContain("GetProperty").And.NotContain("GetParameters").And.NotContain("GetConstructor")
+            .And.NotContain("System.Reflection").And.NotContain("MakeGenericMethod").And.NotContain(".Compile(");
+        generated.Should().Contain("DynamicDependency(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.PublicProperties");
+    }
+
     [Theory(DisplayName = "Sorting generator reports unsupported sorting type declarations")]
     [InlineData("public class Sorting", "Model", "PANEFSG001")]
     [InlineData("public partial class Sorting<T>", "T", "PANEFSG002")]
@@ -170,13 +194,10 @@ public sealed class SortingGeneratorTests
             namespace External;
             public interface IBase { int Rank { get; } }
             public interface IDepartment : IBase { string Name { get; } }
+            public readonly record struct Detail(int Rank);
             public class Container<T>
             {
-                public class Model
-                {
-                    public T Value { get; init; }
-                    public IDepartment Department { get; init; }
-                }
+                public record Model(T Value, IDepartment Department, Detail Detail);
             }
             """, cancellationToken: TestContext.Current.CancellationToken)], References, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
         using var stream = new MemoryStream();
@@ -189,7 +210,8 @@ public sealed class SortingGeneratorTests
             }
             """, additionalReference: MetadataReference.CreateFromImage(stream.ToArray()));
 
-        result.GeneratedSources.Should().ContainSingle().Subject.SourceText.ToString().Should().ContainAll("item.@Value", "item.@Department.@Rank", "item.@Department.@Name");
+        result.GeneratedSources.Should().ContainSingle().Subject.SourceText.ToString().Should().ContainAll(
+            "item.@Value", "item.@Department.@Rank", "item.@Department.@Name", "new global::External.Container<int>.Model", "new global::External.Detail");
     }
 
     [Theory(DisplayName = "Sorting generator rejects open generic projections")]
