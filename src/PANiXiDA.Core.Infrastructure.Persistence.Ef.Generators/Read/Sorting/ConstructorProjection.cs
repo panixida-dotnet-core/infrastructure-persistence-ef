@@ -20,8 +20,7 @@ internal static class ConstructorProjection
             foreach (var constructor in model.InstanceConstructors.Where(IsPositionalConstructor))
             {
                 var members = constructor.Parameters.Select(parameter => properties.FirstOrDefault(property =>
-                    property.Name == parameter.Name && !property.IsStatic && property.GetMethod?.DeclaredAccessibility == Accessibility.Public
-                    && SymbolEqualityComparer.Default.Equals(property.Type, parameter.Type)
+                    property.Name == parameter.Name
                     && SymbolEqualityComparer.Default.Equals(property.ContainingType, model)
                     && property.DeclaringSyntaxReferences.Any(reference => reference.GetSyntax() is ParameterSyntax))).ToArray();
                 if (members.Any(member => member is null))
