@@ -85,6 +85,38 @@ public sealed class SortingGeneratorTests
         result.GeneratedSources.Should().ContainSingle().Subject.SourceText.ToString().Should().ContainAll("item.@Value", "item.@Optional");
     }
 
+    [Fact(DisplayName = "Sorting generator preserves nullable projection annotations and guards root values")]
+    public void Generate_PreservesNullableProjection()
+    {
+        var result = Generate("""
+            public record Model(string Name, int Rank, Department? Department);
+            public record Department(int Rank);
+            public partial class Sorting : IReadModelSorting<Model?>
+            {
+                public static SortingParameters DefaultSorting { get; } = SortingParameters.None;
+            }
+            """);
+
+        var generated = result.GeneratedSources.Should().ContainSingle().Subject.SourceText.ToString();
+        generated.Should().ContainAll("IQueryable<global::Model?>", "IReadModelSorting<global::Model?>",
+            "item == null ? default(int?) : item.@Rank", "item == null || item.@Department == null");
+    }
+
+    [Fact(DisplayName = "Sorting generator supports non-nullable value type projections")]
+    public void Generate_SupportsValueTypeProjection()
+    {
+        var result = Generate("""
+            public readonly record struct Model(int Rank);
+            public partial class Sorting : IReadModelSorting<Model>
+            {
+                public static SortingParameters DefaultSorting { get; } = SortingParameters.None;
+            }
+            """);
+
+        result.GeneratedSources.Should().ContainSingle().Subject.SourceText.ToString()
+            .Should().Contain("item.@Rank").And.NotContain("item == null");
+    }
+
     [Fact(DisplayName = "Sorting generator maps positional constructors using typed expressions without runtime discovery")]
     public void Generate_MapsPositionalConstructors()
     {
@@ -329,6 +361,7 @@ public sealed class SortingGeneratorTests
             if (expectedCompilationError is null)
             {
                 errors.Should().BeEmpty();
+                output.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Warning).Should().BeEmpty();
             }
             else
             {

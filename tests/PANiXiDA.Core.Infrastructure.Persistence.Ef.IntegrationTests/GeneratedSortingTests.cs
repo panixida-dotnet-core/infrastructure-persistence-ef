@@ -100,6 +100,48 @@ public sealed class GeneratedSortingTests(PostgreSqlContainerFixture fixture)
         result.Select(item => item.Label).Should().Equal("high", "low", "none");
     }
 
+    [Theory(DisplayName = "Generated sorting handles null projected rows and preserves key types")]
+    [InlineData("label", SortDirection.Asc)]
+    [InlineData("rank", SortDirection.Desc)]
+    [InlineData("department.rank", SortDirection.Desc)]
+    public void Sorting_HandlesNullProjectedRows(string field, SortDirection direction)
+    {
+        ProductView?[] items =
+        [
+            new() { Label = "B", Rank = -1, Department = new DepartmentView { Rank = -1 } },
+            null,
+            new() { Label = "A", Rank = -2, Department = new DepartmentView { Rank = -2 } }
+        ];
+        var sortingParameters = SortingParameters.Of(new SortField(field, direction));
+        string?[] expected = direction == SortDirection.Asc ? [null, "A", "B"] : ["B", "A", null];
+        var positionalQuery = items.AsQueryable().Select(item => item == null ? null
+            : new PositionalProductView(item.Label, item.Rank,
+                item.Department == null ? null : new PositionalDepartmentView(item.Department.Name, item.Department.Rank)));
+
+        var regular = NullableProductViewSorting.ApplySorting(items.AsQueryable(), sortingParameters).ToArray();
+        var positional = NullablePositionalProductSorting.ApplySorting(positionalQuery, sortingParameters).ToArray();
+
+        regular.Select(item => item?.Label).Should().Equal(expected);
+        positional.Select(item => item?.Label).Should().Equal(expected);
+    }
+
+    [Theory(DisplayName = "Generated sorting translates nullable root projections in PostgreSQL")]
+    [InlineData("name", "A,A,Z,<null>")]
+    [InlineData("rank", "Z,A,A,<null>")]
+    public async Task Sorting_HandlesNullableRootProjectionInDatabase(string field, string expected)
+    {
+        await using var context = await CreateContextAsync();
+        var repository = new ExposedReadRepository(context);
+        var query = repository.Products.Select(item => item.Department == null ? null
+            : new PositionalDepartmentView(item.Department.Name, item.Department.Rank));
+        var sorted = NullableDepartmentViewSorting.ApplySorting(query, SortingParameters.Ascending(field));
+
+        var items = await sorted.ToListAsync(TestContext.Current.CancellationToken);
+
+        items.Select(item => item?.Name ?? "<null>").Should().Equal(expected.Split(','));
+        sorted.ToQueryString().Should().ContainAll("LEFT JOIN", "ORDER BY");
+    }
+
     [Fact(DisplayName = "Projection grouping counts projected rows and sorts aggregate values")]
     public async Task Sorting_HandlesGrouping()
     {
@@ -288,6 +330,21 @@ internal sealed partial class ProductViewSorting : IReadModelSorting<ProductView
 }
 
 internal sealed partial class NoDefaultProductViewSorting : IReadModelSorting<ProductView>
+{
+    public static SortingParameters DefaultSorting { get; } = SortingParameters.None;
+}
+
+internal sealed partial class NullableProductViewSorting : IReadModelSorting<ProductView?>
+{
+    public static SortingParameters DefaultSorting { get; } = SortingParameters.None;
+}
+
+internal sealed partial class NullablePositionalProductSorting : IReadModelSorting<PositionalProductView?>
+{
+    public static SortingParameters DefaultSorting { get; } = SortingParameters.None;
+}
+
+internal sealed partial class NullableDepartmentViewSorting : IReadModelSorting<PositionalDepartmentView?>
 {
     public static SortingParameters DefaultSorting { get; } = SortingParameters.None;
 }

@@ -81,7 +81,8 @@ public sealed class SortingGenerator : IIncrementalGenerator
 
             var paths = new List<(string Path, string Selector)>();
             var models = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
-            CollectPaths(model, "", "item", [], new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default), (models, paths), context.CancellationToken);
+            List<string> guards = model.IsReferenceType && model.NullableAnnotation == NullableAnnotation.Annotated ? ["item == null"] : [];
+            CollectPaths(model, "", "item", guards, new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default), (models, paths), context.CancellationToken);
             var collision = paths.GroupBy(path => path.Path, StringComparer.OrdinalIgnoreCase).FirstOrDefault(group => group.Count() > 1);
             if (collision is not null)
             {
@@ -99,7 +100,8 @@ public sealed class SortingGenerator : IIncrementalGenerator
     private static string BuildSource(INamedTypeSymbol sortingType, INamedTypeSymbol model, INamedTypeSymbol[] containers,
         List<(string Path, string Selector)> paths, string projectionRewriter)
     {
-        var modelName = model.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        var modelName = model.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat.WithMiscellaneousOptions(
+            SymbolDisplayFormat.FullyQualifiedFormat.MiscellaneousOptions | SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier));
         var queryType = $"global::System.Linq.IQueryable<{modelName}>";
         var orderedType = $"global::System.Linq.IOrderedQueryable<{modelName}>";
         const string parametersType = "global::PANiXiDA.Core.Application.Querying.Sorting.SortingParameters";
