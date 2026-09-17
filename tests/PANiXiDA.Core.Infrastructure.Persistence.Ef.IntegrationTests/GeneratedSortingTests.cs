@@ -70,7 +70,8 @@ public sealed class GeneratedSortingTests(PostgreSqlContainerFixture fixture)
     [Fact(DisplayName = "Customized positional properties sort their transformed values in memory")]
     public void Sorting_UsesCustomizedPropertyValuesInMemory()
     {
-        var query = new[] { 10, 30, 20 }.AsQueryable().Select(rank => new CustomizedProductView(rank));
+        int[] ranks = [10, 30, 20];
+        var query = ranks.AsQueryable().Select(rank => new CustomizedProductView(rank));
 
         var items = CustomizedProductSorting.ApplySorting(query, SortingParameters.Ascending("rank")).Take(2).ToArray();
 
