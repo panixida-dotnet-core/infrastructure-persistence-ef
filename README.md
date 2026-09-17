@@ -178,15 +178,18 @@ public sealed class OrderRepository(
 ### Read Models
 
 ```csharp
-using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Mapping;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Models;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Sorting;
+using PANiXiDA.Core.Application.Querying;
+using PANiXiDA.Core.Application.Querying.Sorting;
 
 public sealed class OrderReadDbModel : AuditableReadDbModel<Guid>
 {
     public string Number { get; set; } = string.Empty;
 }
 
-public sealed record OrderReadModel(Guid Id, string Number);
+public sealed record OrderReadModel(Guid Id, string Number) : IReadModel;
 
 public sealed class OrderReadModelMapper
     : IReadModelMapper<Guid, OrderReadDbModel, OrderReadModel>
@@ -196,9 +199,19 @@ public sealed class OrderReadModelMapper
         return query.Select(order => new OrderReadModel(order.Id, order.Number));
     }
 }
+
+public sealed partial class OrderReadModelSorting : IReadModelSorting<OrderReadModel>
+{
+    public static SortingParameters DefaultSorting { get; } =
+        SortingParameters.Ascending(nameof(OrderReadModel.Number));
+}
 ```
 
 Concrete `ReadDbModel<TId>` types in the read DbContext assembly are registered automatically. By default they are mapped as no-tracking models and excluded from migrations, which is useful when read models point to tables or views owned by another context.
+
+The package generates `ApplySorting` for partial `IReadModelSorting<TReadModel>` implementations from public scalar properties, including nested paths such as `department.name`. At the first repeated type, scalar fields such as `manager.name` remain available; further nesting stops. CLR and camelCase paths are matched ignoring case. `DefaultSorting` is required; use `SortingParameters.None` for no defaults. Client criteria take precedence, and missing default fields are appended automatically.
+
+Plain positional records are supported across assemblies, including Application read models and nested record structs. Keep read models as DTOs and perform transformations in `Select`, for example `new Model(row.Name.ToUpper())`. Referenced constructors are matched by parameter/property names and types; this relies on the DTO convention because hidden transformations cannot be verified from metadata. Nullable projections (`IReadModelSorting<Model?>`) use the model's field paths and null keys for null rows. For nullable root projections in EF queries, use reference types: nullable structs are supported in memory, but their SQL translation is limited by EF. Sorting and pagination run after projection; counts also use the projected query, including supported `GroupBy` and `Distinct` projections.
 
 ### Read Repository
 
@@ -214,7 +227,7 @@ public interface IOrderReadRepository : IReadRepository<Guid>
 
     Task<PaginationResult<OrderReadModel>> GetPageAsync(
         PaginationParameters pagination,
-        SortParameters sort,
+        SortingParameters sortingParameters,
         CancellationToken cancellationToken);
 }
 
@@ -228,16 +241,24 @@ public sealed class OrderReadRepository(AppReadDbContext dbContext)
 
     public Task<PaginationResult<OrderReadModel>> GetPageAsync(
         PaginationParameters pagination,
-        SortParameters sort,
+        SortingParameters sortingParameters,
         CancellationToken cancellationToken)
     {
-        return GetPagedResultAsync<OrderReadModel, OrderReadModelMapper>(
+        return GetPagedResultAsync<OrderReadModel, OrderReadModelMapper, OrderReadModelSorting>(
             Query,
             pagination,
-            sort,
+            sortingParameters,
             cancellationToken);
     }
 }
+```
+
+For an unpaginated list, the same sorting class applies its defaults:
+
+```csharp
+var query = OrderReadModelMapper.ProjectTo(Query);
+query = OrderReadModelSorting.ApplySorting(query, sortingParameters);
+var items = await query.ToListAsync(cancellationToken);
 ```
 
 ## Behavior Notes
@@ -247,7 +268,7 @@ public sealed class OrderReadRepository(AppReadDbContext dbContext)
 - Modified entities receive a new `UpdatedAt`; `CreatedAt` is marked as not modified.
 - Deleted entities that have `DeletedAt` are converted to modified entities and receive `DeletedAt` and `UpdatedAt`.
 - `AuditableReadDbModel<TId>` and auditable write configurations apply a query filter that hides rows where `DeletedAt` is not null.
-- `EfReadRepository` uses dynamic sorting field names; callers should pass known model property names, not arbitrary user input without validation.
+- `EfReadRepository` sorts by projected read model fields through generated typed selectors. Unsupported fields and directions are rejected; sorting does not discover members through runtime reflection.
 - Repository implementation scanning registers concrete, non-abstract, non-generic classes against non-generic contracts that inherit `IRepository<TId, TAggregateRoot>` or `IReadRepository<TId>`. Direct base generic repository interfaces are intentionally ignored.
 
 ## Project Structure
@@ -255,7 +276,8 @@ public sealed class OrderReadRepository(AppReadDbContext dbContext)
 ```text
 .
 |-- src/
-|   `-- PANiXiDA.Core.Infrastructure.Persistence.Ef/
+|   |-- PANiXiDA.Core.Infrastructure.Persistence.Ef/
+|   `-- PANiXiDA.Core.Infrastructure.Persistence.Ef.Generators/
 |-- tests/
 |   |-- PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests/
 |   `-- PANiXiDA.Core.Infrastructure.Persistence.Ef.UnitTests/

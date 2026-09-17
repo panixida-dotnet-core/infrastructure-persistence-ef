@@ -5,6 +5,7 @@
 
     <ItemGroup>
         <PackageReference Include="FluentAssertions" />
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
         <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
         <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />
         <PackageReference Include="xunit.v3" />
@@ -18,5 +19,9 @@
     <ItemGroup>
         <Using Include="Xunit" />
         <Using Include="FluentAssertions" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../../src/PANiXiDA.Core.Infrastructure.Persistence.Ef.Generators/PANiXiDA.Core.Infrastructure.Persistence.Ef.Generators.csproj" />
     </ItemGroup>
 </Project>

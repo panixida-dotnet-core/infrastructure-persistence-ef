@@ -1,6 +1,6 @@
 ﻿using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Models;
 
-namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Read;
+namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Mapping;
 
 /// <summary>
 /// Defines a static projection from a database read model query to an application read model query.

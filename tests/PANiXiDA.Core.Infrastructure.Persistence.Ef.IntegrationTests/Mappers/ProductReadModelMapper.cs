@@ -1,5 +1,5 @@
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.ReadModels;
-using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Mapping;
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.Mappers;
 
@@ -8,6 +8,6 @@ internal sealed class ProductReadModelMapper
 {
     public static IQueryable<ProductReadModel> ProjectTo(IQueryable<ProductReadDbModel> query)
     {
-        return query.Select(item => new ProductReadModel(item.Id, item.Name, item.Score));
+        return query.Select(item => new ProductReadModel { Id = item.Id, Name = item.Name, Score = item.Score });
     }
 }

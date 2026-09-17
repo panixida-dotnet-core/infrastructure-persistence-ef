@@ -56,7 +56,7 @@ public sealed class EfReadRepositoryTests(PostgreSqlContainerFixture fixture)
 
         var readModel = await repository.GetProductByIdAsync(2);
 
-        readModel.Should().Be(new ProductReadModel(2, "Beta", 20));
+        readModel.Should().Be(new ProductReadModel { Id = 2, Name = "Beta", Score = 20 });
     }
 
     [Fact(DisplayName = "GetByIdAsync returns null when read model is missing")]
@@ -79,7 +79,7 @@ public sealed class EfReadRepositoryTests(PostgreSqlContainerFixture fixture)
         var result = await repository.GetProductsPageAsync(
             repository.Products,
             new PaginationParameters(3, 5),
-            SortParameters.Default());
+            SortingParameters.Default());
 
         result.Items.Should().BeEmpty();
         result.PageNumber.Should().Be(3);
@@ -100,11 +100,11 @@ public sealed class EfReadRepositoryTests(PostgreSqlContainerFixture fixture)
         var result = await repository.GetProductsPageAsync(
             repository.Products,
             new PaginationParameters(1, 2),
-            new SortParameters(nameof(ProductReadDbModel.Score), SortOrder.Descending));
+            SortingParameters.Descending(nameof(ProductReadModel.Score)));
 
         result.Items.Should().Equal(
-            new ProductReadModel(3, "Gamma", 30),
-            new ProductReadModel(2, "Beta", 20));
+            new ProductReadModel { Id = 3, Name = "Gamma", Score = 30 },
+            new ProductReadModel { Id = 2, Name = "Beta", Score = 20 });
         result.PageNumber.Should().Be(1);
         result.PageSize.Should().Be(2);
         result.TotalCount.Should().Be(3);
@@ -129,16 +129,16 @@ public sealed class EfReadRepositoryTests(PostgreSqlContainerFixture fixture)
         ids.Should().Equal(2);
     }
 
-    [Fact(DisplayName = "ApplySort uses Id descending when field is blank")]
-    public async Task ApplySort_UsesIdDescending_WhenFieldIsBlank()
+    [Fact(DisplayName = "ApplySort preserves existing ordering when sorting is empty")]
+    public async Task ApplySort_PreservesExistingOrdering_WhenSortingIsEmpty()
     {
         await using var context = await CreateContextAsync();
         await SeedProductsAsync(context);
         var repository = new ExposedReadRepository(context);
 
-        var ids = await repository.ApplySortForTest(
-                repository.Products,
-                new SortParameters(" ", SortOrder.Ascending))
+        var ids = await ExposedReadRepository.ApplySortForTest(
+                repository.Products.OrderByDescending(item => item.Id),
+                SortingParameters.None)
             .Select(item => item.Id)
             .ToListAsync(TestContext.Current.CancellationToken);
 
@@ -152,17 +152,17 @@ public sealed class EfReadRepositoryTests(PostgreSqlContainerFixture fixture)
         await SeedProductsAsync(context);
         var repository = new ExposedReadRepository(context);
 
-        var ids = await repository.ApplySortForTest(
+        var ids = await ExposedReadRepository.ApplySortForTest(
                 repository.Products,
-                new SortParameters("id", SortOrder.Ascending))
+                SortingParameters.Ascending("id"))
             .Select(item => item.Id)
             .ToListAsync(TestContext.Current.CancellationToken);
 
         ids.Should().Equal(1, 2, 3);
     }
 
-    [Fact(DisplayName = "ApplySort sorts by custom field and then by Id descending")]
-    public async Task ApplySort_SortsByCustomFieldAndThenByIdDescending()
+    [Fact(DisplayName = "ApplySort appends explicit default criteria")]
+    public async Task ApplySort_AppendsExplicitDefaults()
     {
         await using var context = await CreateContextAsync();
         context.Set<ProductReadDbModel>().AddRange(
@@ -182,9 +182,9 @@ public sealed class EfReadRepositoryTests(PostgreSqlContainerFixture fixture)
 
         var repository = new ExposedReadRepository(context);
 
-        var ids = await repository.ApplySortForTest(
+        var ids = await ExposedReadRepository.ApplySortForTest(
                 repository.Products,
-                new SortParameters(nameof(ProductReadDbModel.Name), SortOrder.Ascending))
+                SortingParameters.Ascending(nameof(ProductReadModel.Name)).WithDefault(SortingParameters.Descending(nameof(ProductReadModel.Id))))
             .Select(item => item.Id)
             .ToListAsync(TestContext.Current.CancellationToken);
 

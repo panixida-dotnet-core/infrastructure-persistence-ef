@@ -1,10 +1,14 @@
 using PANiXiDA.Core.Application.Querying.Cursor;
+using Microsoft.EntityFrameworkCore;
 using PANiXiDA.Core.Application.Querying.Pagination;
 using PANiXiDA.Core.Application.Querying.Sorting;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.DbContexts;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.Mappers;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.ReadModels;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Mapping;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Sorting;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.Sorting;
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.Repositories;
 
@@ -21,12 +25,12 @@ internal sealed class ExposedReadRepository(WritableReadDbContext dbContext)
     public Task<PaginationResult<ProductReadModel>> GetProductsPageAsync(
         IQueryable<ProductReadDbModel> query,
         PaginationParameters paginationParameters,
-        SortParameters sortParameters)
+        SortingParameters sortingParameters)
     {
-        return GetPagedResultAsync<ProductReadModel, ProductReadModelMapper>(
+        return GetPagedResultAsync<ProductReadModel, ProductReadModelMapper, ProductReadModelSorting>(
             query,
             paginationParameters,
-            sortParameters,
+            sortingParameters,
             TestContext.Current.CancellationToken);
     }
 
@@ -37,11 +41,11 @@ internal sealed class ExposedReadRepository(WritableReadDbContext dbContext)
         return ApplyPagination(query, paginationParameters);
     }
 
-    public IQueryable<ProductReadDbModel> ApplySortForTest(
+    public static IQueryable<ProductReadModel> ApplySortForTest(
         IQueryable<ProductReadDbModel> query,
-        SortParameters sortParameters)
+        SortingParameters sortingParameters)
     {
-        return ApplySort(query, sortParameters);
+        return ProductReadModelSorting.ApplySorting(ProductReadModelMapper.ProjectTo(query), sortingParameters);
     }
 
     public static Task<CursorPaginationResult<ProductReadDbModel>> GetCursorPageAsync(
@@ -57,4 +61,21 @@ internal sealed class ExposedReadRepository(WritableReadDbContext dbContext)
     }
 
     public IQueryable<ProductReadDbModel> Products => Query;
+
+    public Task<PaginationResult<TReadModel>> GetProjectionPageAsync<TReadModel, TMapper, TSorting>(
+        PaginationParameters pagination, SortingParameters sortingParameters)
+        where TMapper : IReadModelMapper<int, ProductReadDbModel, TReadModel>
+        where TSorting : IReadModelSorting<TReadModel>
+    {
+        return GetPagedResultAsync<TReadModel, TMapper, TSorting>(Query, pagination, sortingParameters, TestContext.Current.CancellationToken);
+    }
+
+    public Task<List<TReadModel>> GetProjectionListAsync<TReadModel, TMapper, TSorting>(SortingParameters sortingParameters)
+        where TMapper : IReadModelMapper<int, ProductReadDbModel, TReadModel>
+        where TSorting : IReadModelSorting<TReadModel>
+    {
+        var query = TMapper.ProjectTo(Query);
+        query = TSorting.ApplySorting(query, sortingParameters);
+        return query.ToListAsync(TestContext.Current.CancellationToken);
+    }
 }
