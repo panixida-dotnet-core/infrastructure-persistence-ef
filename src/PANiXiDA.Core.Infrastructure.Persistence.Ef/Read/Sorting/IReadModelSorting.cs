@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 using PANiXiDA.Core.Application.Querying.Sorting;
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Sorting;
@@ -12,6 +14,7 @@ public interface IReadModelSorting<TReadModel>
     /// Gets default criteria appended after client criteria when their fields are not already present.
     /// Use <see cref="SortingParameters.None"/> to explicitly omit default sorting.
     /// </summary>
+    [SuppressMessage("Major Code Smell", "S2743", Justification = "This static abstract property declares a per-model contract and has no backing field or shared state.")]
     static abstract SortingParameters DefaultSorting { get; }
 
     /// <summary>

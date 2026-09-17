@@ -6,6 +6,7 @@ using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.DbContexts;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.Mappers;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.ReadModels;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Mapping;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Sorting;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.Sorting;
 

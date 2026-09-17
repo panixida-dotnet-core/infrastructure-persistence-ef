@@ -283,7 +283,7 @@ public sealed class SortingGeneratorTests
             using System.Linq;
             using System.Collections.Generic;
             using PANiXiDA.Core.Application.Querying.Sorting;
-            using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read;
+            using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Mapping;
             using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Sorting;
 
             """ + source);

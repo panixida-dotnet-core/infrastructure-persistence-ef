@@ -178,7 +178,7 @@ public sealed class OrderRepository(
 ### Read Models
 
 ```csharp
-using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Mapping;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Models;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Sorting;
 using PANiXiDA.Core.Application.Querying;

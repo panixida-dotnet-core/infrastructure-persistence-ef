@@ -1,5 +1,5 @@
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.ReadModels;
-using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Mapping;
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.Mappers;
 

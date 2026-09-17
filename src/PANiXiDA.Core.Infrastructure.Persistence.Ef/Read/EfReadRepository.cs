@@ -5,6 +5,7 @@ using PANiXiDA.Core.Application.Querying.Cursor;
 using PANiXiDA.Core.Application.Querying.Pagination;
 using PANiXiDA.Core.Application.Querying.Sorting;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.DbContexts;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Mapping;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Models;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Sorting;
 
