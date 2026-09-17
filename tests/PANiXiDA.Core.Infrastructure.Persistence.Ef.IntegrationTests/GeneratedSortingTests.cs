@@ -142,6 +142,33 @@ public sealed class GeneratedSortingTests(PostgreSqlContainerFixture fixture)
         sorted.ToQueryString().Should().ContainAll("LEFT JOIN", "ORDER BY");
     }
 
+    [Theory(DisplayName = "Generated sorting handles nullable struct rows using the model's field paths")]
+    [InlineData("name", SortDirection.Asc)]
+    [InlineData("rank", SortDirection.Asc)]
+    [InlineData("Rank", SortDirection.Desc)]
+    public void Sorting_HandlesNullableStructRows(string field, SortDirection direction)
+    {
+        DepartmentStructView?[] items = [new("B", -1), null, new("A", -2)];
+        var sortingParameters = SortingParameters.Of(new SortField(field, direction));
+        string?[] expected = direction == SortDirection.Asc ? [null, "A", "B"] : ["B", "A", null];
+
+        var sorted = NullableDepartmentStructSorting.ApplySorting(items.AsQueryable(), sortingParameters).ToArray();
+
+        sorted.Select(item => item?.Name).Should().Equal(expected);
+    }
+
+    [Theory(DisplayName = "Generated sorting rejects nullable wrapper paths")]
+    [InlineData("HasValue")]
+    [InlineData("Value.Rank")]
+    public void Sorting_RejectsNullableWrapperPaths(string field)
+    {
+        var query = Array.Empty<DepartmentStructView?>().AsQueryable();
+
+        var action = () => NullableDepartmentStructSorting.ApplySorting(query, SortingParameters.Ascending(field));
+
+        action.Should().Throw<ArgumentException>();
+    }
+
     [Fact(DisplayName = "Projection grouping counts projected rows and sorts aggregate values")]
     public async Task Sorting_HandlesGrouping()
     {
@@ -287,6 +314,8 @@ internal sealed record PositionalProductView(string Label, int Rank, PositionalD
 
 internal sealed record PositionalDepartmentView(string Name, int Rank);
 
+internal readonly record struct DepartmentStructView(string Name, int Rank);
+
 internal sealed class PositionalProductMapper : IReadModelMapper<int, ProductReadDbModel, PositionalProductView>
 {
     public static IQueryable<PositionalProductView> ProjectTo(IQueryable<ProductReadDbModel> query)
@@ -345,6 +374,11 @@ internal sealed partial class NullablePositionalProductSorting : IReadModelSorti
 }
 
 internal sealed partial class NullableDepartmentViewSorting : IReadModelSorting<PositionalDepartmentView?>
+{
+    public static SortingParameters DefaultSorting { get; } = SortingParameters.None;
+}
+
+internal sealed partial class NullableDepartmentStructSorting : IReadModelSorting<DepartmentStructView?>
 {
     public static SortingParameters DefaultSorting { get; } = SortingParameters.None;
 }

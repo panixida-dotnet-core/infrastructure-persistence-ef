@@ -102,6 +102,25 @@ public sealed class SortingGeneratorTests
             "item == null ? default(int?) : item.@Rank", "item == null || item.@Department == null");
     }
 
+    [Fact(DisplayName = "Sorting generator unwraps nullable value type projections and guards root values")]
+    public void Generate_SupportsNullableValueTypeProjection()
+    {
+        var result = Generate("""
+            public readonly record struct Model(int Rank, Department? Department);
+            public readonly record struct Department(int Rank);
+            public partial class Sorting : IReadModelSorting<Model?>
+            {
+                public static SortingParameters DefaultSorting { get; } = SortingParameters.None;
+            }
+            """);
+
+        var generated = result.GeneratedSources.Should().ContainSingle().Subject.SourceText.ToString();
+        generated.Should().ContainAll("IQueryable<global::Model?>", "IReadModelSorting<global::Model?>",
+            "!item.HasValue ? default(int?) : item.Value.@Rank",
+            "!item.HasValue || item.Value.@Department == null", "new global::Model(");
+        generated.Should().NotContain("\"HasValue\"").And.NotContain("\"Value.Rank\"");
+    }
+
     [Fact(DisplayName = "Sorting generator supports non-nullable value type projections")]
     public void Generate_SupportsValueTypeProjection()
     {

@@ -82,7 +82,16 @@ public sealed class SortingGenerator : IIncrementalGenerator
             var paths = new List<(string Path, string Selector)>();
             var models = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
             List<string> guards = model.IsReferenceType && model.NullableAnnotation == NullableAnnotation.Annotated ? ["item == null"] : [];
-            CollectPaths(model, "", "item", guards, new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default), (models, paths), context.CancellationToken);
+            var projectionModel = model;
+            var access = "item";
+            if (model.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
+            {
+                projectionModel = (INamedTypeSymbol)model.TypeArguments[0];
+                access = "item.Value";
+                guards.Add("!item.HasValue");
+            }
+
+            CollectPaths(projectionModel, "", access, guards, new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default), (models, paths), context.CancellationToken);
             var collision = paths.GroupBy(path => path.Path, StringComparer.OrdinalIgnoreCase).FirstOrDefault(group => group.Count() > 1);
             if (collision is not null)
             {

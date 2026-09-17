@@ -211,7 +211,7 @@ Concrete `ReadDbModel<TId>` types in the read DbContext assembly are registered 
 
 The package generates `ApplySorting` for partial `IReadModelSorting<TReadModel>` implementations from public scalar properties, including nested paths such as `department.name`. CLR and camelCase paths are matched ignoring case. `DefaultSorting` is required; use `SortingParameters.None` for no defaults. Client criteria take precedence, and missing default fields are appended automatically.
 
-Positional records and property initializers are supported, including nested records. Nullable projections (`IReadModelSorting<Model?>`) use null keys for null rows. Sorting and pagination run after projection; counts also use the projected query, including supported `GroupBy` and `Distinct` projections.
+Positional records and property initializers are supported, including nested records. Nullable projections (`IReadModelSorting<Model?>`) use the model's field paths and null keys for null rows. For nullable root projections in EF queries, use reference types: nullable structs are supported in memory, but their SQL translation is limited by EF. Sorting and pagination run after projection; counts also use the projected query, including supported `GroupBy` and `Distinct` projections.
 
 ### Read Repository
 
