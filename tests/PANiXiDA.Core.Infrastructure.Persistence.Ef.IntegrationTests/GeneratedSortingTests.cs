@@ -23,11 +23,14 @@ public sealed class GeneratedSortingTests(PostgreSqlContainerFixture fixture)
         var repository = new ExposedReadRepository(context);
         var query = repository.Products.Select(item => new EmployeeView(item.Name, item.Id,
             item.Department == null ? null : new EmployeeView(item.Department.Name, item.Department.Rank, null)));
+        var sortingParameters = SortingParameters.Of(new SortField("manager.name", direction));
 
-        var sorted = EmployeeSorting.ApplySorting(query, SortingParameters.Of(new SortField("manager.name", direction)));
+        var validation = new EmployeeViewSortingValidator().Validate(sortingParameters);
+        var sorted = EmployeeSorting.ApplySorting(query, sortingParameters);
         var items = await sorted.ToListAsync(TestContext.Current.CancellationToken);
         var page = await sorted.Skip(1).Take(2).ToListAsync(TestContext.Current.CancellationToken);
 
+        validation.IsValid.Should().BeTrue();
         items.Select(item => item.Rank).Should().Equal(expected.Split(',').Select(int.Parse));
         page.Should().Equal(items.Skip(1).Take(2));
         sorted.ToQueryString().Should().ContainAll("ORDER BY", "LEFT JOIN");
