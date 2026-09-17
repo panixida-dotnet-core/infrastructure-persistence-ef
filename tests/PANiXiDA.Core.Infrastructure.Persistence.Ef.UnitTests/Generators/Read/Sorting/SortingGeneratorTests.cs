@@ -194,7 +194,12 @@ public sealed class SortingGeneratorTests
             namespace External;
             public interface IBase { int Rank { get; } }
             public interface IDepartment : IBase { string Name { get; } }
-            public readonly record struct Detail(int Rank);
+            public record struct Detail(int Rank)
+            {
+                public string WriteOnly { set { } }
+                public Detail(string Rank) : this(int.Parse(Rank)) { }
+                public Detail(string WriteOnly, int unused) : this(0) { }
+            }
             public class Container<T>
             {
                 public record Model(T Value, IDepartment Department, Detail Detail);
@@ -212,6 +217,7 @@ public sealed class SortingGeneratorTests
 
         result.GeneratedSources.Should().ContainSingle().Subject.SourceText.ToString().Should().ContainAll(
             "item.@Value", "item.@Department.@Rank", "item.@Department.@Name", "new global::External.Container<int>.Model", "new global::External.Detail");
+        result.GeneratedSources[0].SourceText.ToString().Should().NotContain("new global::External.Detail(default(string)");
     }
 
     [Theory(DisplayName = "Sorting generator rejects open generic projections")]
