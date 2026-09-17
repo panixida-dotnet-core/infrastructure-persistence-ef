@@ -160,6 +160,42 @@ public sealed class SortingGeneratorTests
         generated.Should().Contain("DynamicDependency(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.PublicProperties");
     }
 
+    [Theory(DisplayName = "Sorting generator does not map customized positional properties to constructor arguments")]
+    [InlineData("record")]
+    [InlineData("record struct")]
+    public void Generate_SkipsCustomizedPositionalProperties(string kind)
+    {
+        var result = Generate($$"""
+            public {{kind}} Model(int Rank)
+            {
+                public int Rank { get; init; } = -Rank;
+            }
+            public partial class Sorting : IReadModelSorting<Model>
+            {
+                public static SortingParameters DefaultSorting { get; } = SortingParameters.None;
+            }
+            """);
+
+        result.GeneratedSources.Should().ContainSingle().Subject.SourceText.ToString()
+            .Should().Contain("item.@Rank").And.NotContain("SortingProjectionRewriter");
+    }
+
+    [Fact(DisplayName = "Sorting generator does not map inherited positional properties to derived constructor arguments")]
+    public void Generate_SkipsInheritedPositionalProperties()
+    {
+        var result = Generate("""
+            public record Base(int Rank);
+            public record Model(int Rank) : Base(-Rank);
+            public partial class Sorting : IReadModelSorting<Model>
+            {
+                public static SortingParameters DefaultSorting { get; } = SortingParameters.None;
+            }
+            """);
+
+        result.GeneratedSources.Should().ContainSingle().Subject.SourceText.ToString()
+            .Should().Contain("item.@Rank").And.NotContain("SortingProjectionRewriter");
+    }
+
     [Theory(DisplayName = "Sorting generator reports unsupported sorting type declarations")]
     [InlineData("public class Sorting", "Model", "PANEFSG001")]
     [InlineData("public partial class Sorting<T>", "T", "PANEFSG002")]
@@ -238,15 +274,18 @@ public sealed class SortingGeneratorTests
             """);
     }
 
-    [Fact(DisplayName = "Sorting generator reads inherited interfaces and concrete generic models from a referenced assembly")]
-    public void Generate_ReadsReferencedModels()
+    [Theory(DisplayName = "Sorting generator reads referenced model paths without guessing constructor assignments")]
+    [InlineData("")]
+    [InlineData("public int Rank { get; init; } = -Rank;")]
+    public void Generate_ReadsReferencedModels(string property)
     {
-        var models = CSharpCompilation.Create("ExternalModels", [CSharpSyntaxTree.ParseText("""
+        var models = CSharpCompilation.Create("ExternalModels", [CSharpSyntaxTree.ParseText($$"""
             namespace External;
             public interface IBase { int Rank { get; } }
             public interface IDepartment : IBase { string Name { get; } }
             public record struct Detail(int Rank)
             {
+                {{property}}
                 public string WriteOnly { set { } }
                 public Detail(string Rank) : this(int.Parse(Rank)) { }
                 public Detail(string WriteOnly, int unused) : this(0) { }
@@ -267,8 +306,8 @@ public sealed class SortingGeneratorTests
             """, additionalReference: MetadataReference.CreateFromImage(stream.ToArray()));
 
         result.GeneratedSources.Should().ContainSingle().Subject.SourceText.ToString().Should().ContainAll(
-            "item.@Value", "item.@Department.@Rank", "item.@Department.@Name", "new global::External.Container<int>.Model", "new global::External.Detail");
-        result.GeneratedSources[0].SourceText.ToString().Should().NotContain("new global::External.Detail(default(string)");
+            "item.@Value", "item.@Department.@Rank", "item.@Department.@Name", "item.@Detail.@Rank");
+        result.GeneratedSources[0].SourceText.ToString().Should().NotContain("SortingProjectionRewriter");
     }
 
     [Theory(DisplayName = "Sorting generator rejects open generic projections")]

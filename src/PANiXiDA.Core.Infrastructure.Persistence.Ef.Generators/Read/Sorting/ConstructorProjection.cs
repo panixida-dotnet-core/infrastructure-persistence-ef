@@ -13,8 +13,7 @@ internal static class ConstructorProjection
         var templates = new StringBuilder();
         var mappings = new StringBuilder();
         var index = 0;
-        foreach (var model in models.Where(model => !model.IsAbstract
-                         && (model.IsRecord || model.TypeKind == TypeKind.Struct && model.DeclaringSyntaxReferences.Length == 0))
+        foreach (var model in models.Where(model => !model.IsAbstract && model.IsRecord)
                      .OrderBy(model => model.ToDisplayString(), StringComparer.Ordinal))
         {
             var properties = SortingGenerator.Properties(model).ToArray();
@@ -22,7 +21,9 @@ internal static class ConstructorProjection
             {
                 var members = constructor.Parameters.Select(parameter => properties.FirstOrDefault(property =>
                     property.Name == parameter.Name && !property.IsStatic && property.GetMethod?.DeclaredAccessibility == Accessibility.Public
-                    && SymbolEqualityComparer.Default.Equals(property.Type, parameter.Type))).ToArray();
+                    && SymbolEqualityComparer.Default.Equals(property.Type, parameter.Type)
+                    && SymbolEqualityComparer.Default.Equals(property.ContainingType, model)
+                    && property.DeclaringSyntaxReferences.Any(reference => reference.GetSyntax() is ParameterSyntax))).ToArray();
                 if (members.Any(member => member is null))
                 {
                     continue;
@@ -65,8 +66,7 @@ internal static class ConstructorProjection
     {
         return constructor.DeclaredAccessibility == Accessibility.Public && constructor.Parameters.Length > 0
             && constructor.Parameters.All(parameter => parameter.RefKind == RefKind.None)
-            && (constructor.DeclaringSyntaxReferences.Length == 0
-                || constructor.DeclaringSyntaxReferences.Any(reference => reference.GetSyntax() is RecordDeclarationSyntax { ParameterList: not null }));
+            && constructor.DeclaringSyntaxReferences.Any(reference => reference.GetSyntax() is RecordDeclarationSyntax { ParameterList: not null });
     }
 
     private static void AppendTemplate(StringBuilder source, INamedTypeSymbol model, IMethodSymbol constructor,

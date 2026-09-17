@@ -54,6 +54,43 @@ public sealed class GeneratedSortingTests(PostgreSqlContainerFixture fixture)
         items.Select(item => item.Label).Should().Equal("Gamma", "Alpha", "Beta", "Alpha");
     }
 
+    [Fact(DisplayName = "Customized positional properties do not silently sort by raw constructor arguments")]
+    public async Task Sorting_RejectsCustomizedConstructorProjectionInDatabase()
+    {
+        await using var context = await CreateContextAsync();
+        var repository = new ExposedReadRepository(context);
+        var query = repository.Products.Select(item => new CustomizedProductView(item.Score));
+        var sorted = CustomizedProductSorting.ApplySorting(query, SortingParameters.Ascending("rank"));
+
+        var translate = () => sorted.Take(2).ToQueryString();
+
+        translate.Should().Throw<InvalidOperationException>().WithMessage("*could not be translated*");
+    }
+
+    [Fact(DisplayName = "Customized positional properties sort their transformed values in memory")]
+    public void Sorting_UsesCustomizedPropertyValuesInMemory()
+    {
+        var query = new[] { 10, 30, 20 }.AsQueryable().Select(rank => new CustomizedProductView(rank));
+
+        var items = CustomizedProductSorting.ApplySorting(query, SortingParameters.Ascending("rank")).Take(2).ToArray();
+
+        items.Select(item => item.Rank).Should().Equal(-30, -20);
+    }
+
+    [Fact(DisplayName = "Explicit property initializers preserve customized values during database sorting and pagination")]
+    public async Task Sorting_UsesExplicitCustomizedPropertyProjection()
+    {
+        await using var context = await CreateContextAsync();
+        var repository = new ExposedReadRepository(context);
+        var query = repository.Products.Select(item => new CustomizedProductView(0) { Rank = -item.Score });
+        var sorted = CustomizedProductSorting.ApplySorting(query, SortingParameters.Ascending("rank")).Skip(1).Take(2);
+
+        var items = await sorted.ToListAsync(TestContext.Current.CancellationToken);
+
+        items.Select(item => item.Rank).Should().Equal(-30, -20);
+        sorted.ToQueryString().Should().ContainAll("ORDER BY", "LIMIT", "OFFSET");
+    }
+
     [Fact(DisplayName = "Generated sorting uses projected and calculated fields before database pagination")]
     public async Task Sorting_UsesProjectionBeforePagination()
     {
@@ -315,6 +352,16 @@ internal sealed record PositionalProductView(string Label, int Rank, PositionalD
 internal sealed record PositionalDepartmentView(string Name, int Rank);
 
 internal readonly record struct DepartmentStructView(string Name, int Rank);
+
+internal sealed record CustomizedProductView(int Rank)
+{
+    public int Rank { get; init; } = -Rank;
+}
+
+internal sealed partial class CustomizedProductSorting : IReadModelSorting<CustomizedProductView>
+{
+    public static SortingParameters DefaultSorting { get; } = SortingParameters.None;
+}
 
 internal sealed class PositionalProductMapper : IReadModelMapper<int, ProductReadDbModel, PositionalProductView>
 {
