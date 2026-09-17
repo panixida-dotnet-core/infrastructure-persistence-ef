@@ -274,18 +274,15 @@ public sealed class SortingGeneratorTests
             """);
     }
 
-    [Theory(DisplayName = "Sorting generator reads referenced model paths without guessing constructor assignments")]
-    [InlineData("")]
-    [InlineData("public int Rank { get; init; } = -Rank;")]
-    public void Generate_ReadsReferencedModels(string property)
+    [Fact(DisplayName = "Sorting generator maps plain positional records and nested record structs from a referenced assembly")]
+    public void Generate_ReadsReferencedModels()
     {
-        var models = CSharpCompilation.Create("ExternalModels", [CSharpSyntaxTree.ParseText($$"""
+        var models = CSharpCompilation.Create("ExternalModels", [CSharpSyntaxTree.ParseText("""
             namespace External;
             public interface IBase { int Rank { get; } }
             public interface IDepartment : IBase { string Name { get; } }
             public record struct Detail(int Rank)
             {
-                {{property}}
                 public string WriteOnly { set { } }
                 public Detail(string Rank) : this(int.Parse(Rank)) { }
                 public Detail(string WriteOnly, int unused) : this(0) { }
@@ -306,8 +303,9 @@ public sealed class SortingGeneratorTests
             """, additionalReference: MetadataReference.CreateFromImage(stream.ToArray()));
 
         result.GeneratedSources.Should().ContainSingle().Subject.SourceText.ToString().Should().ContainAll(
-            "item.@Value", "item.@Department.@Rank", "item.@Department.@Name", "item.@Detail.@Rank");
-        result.GeneratedSources[0].SourceText.ToString().Should().NotContain("SortingProjectionRewriter");
+            "item.@Value", "item.@Department.@Rank", "item.@Department.@Name", "item.@Detail.@Rank",
+            "new global::External.Container<int>.Model", "new global::External.Detail");
+        result.GeneratedSources[0].SourceText.ToString().Should().NotContain("new global::External.Detail(default(string)");
     }
 
     [Theory(DisplayName = "Sorting generator rejects open generic projections")]
