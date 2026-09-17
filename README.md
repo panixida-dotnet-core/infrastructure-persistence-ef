@@ -265,8 +265,6 @@ query = OrderReadModelSorting.ApplySorting(query, sortingParameters);
 var items = await query.ToListAsync(cancellationToken);
 ```
 
-No implicit `Id` criterion is added. Validate requests with the Application-generated `OrderReadModelSortingValidator`.
-
 ## Behavior Notes
 
 - Audit timestamps are stored as EF Core shadow properties for write entities configured through `AuditableEntityConfiguration<TEntity>`.
