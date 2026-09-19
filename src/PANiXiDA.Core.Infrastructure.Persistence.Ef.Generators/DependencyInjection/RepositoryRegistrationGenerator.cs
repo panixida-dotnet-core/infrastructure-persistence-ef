@@ -57,40 +57,47 @@ public sealed class RepositoryRegistrationGenerator : IIncrementalGenerator
                 continue;
             }
 
-            foreach (var contract in implementation.AllInterfaces.OrderBy(type => type.ToDisplayString(), StringComparer.Ordinal))
-            {
-                if (IsGeneric(contract))
-                {
-                    continue;
-                }
-
-                var isWrite = InheritsContract(contract, writeContract);
-                var isRead = InheritsContract(contract, readContract);
-                if (!isWrite && !isRead)
-                {
-                    continue;
-                }
-
-                var inaccessibleType = IsAccessible(implementation, compilation) ? contract : implementation;
-                if (!IsAccessible(inaccessibleType, compilation))
-                {
-                    context.ReportDiagnostic(Diagnostic.Create(InaccessibleRepository, implementation.Locations[0], inaccessibleType.ToDisplayString()));
-                    break;
-                }
-
-                if (isWrite)
-                {
-                    AppendRegistration(writeRegistrations, contract, implementation);
-                }
-
-                if (isRead)
-                {
-                    AppendRegistration(readRegistrations, contract, implementation);
-                }
-            }
+            AppendRegistrations(context, compilation, implementation,
+                (writeContract, readContract), (writeRegistrations, readRegistrations));
         }
 
         context.AddSource("RepositoryRegistrations.g.cs", SourceText.From(BuildSource(writeRegistrations, readRegistrations), Encoding.UTF8));
+    }
+
+    private static void AppendRegistrations(SourceProductionContext context, Compilation compilation, INamedTypeSymbol implementation,
+        (INamedTypeSymbol Write, INamedTypeSymbol Read) contracts, (StringBuilder Write, StringBuilder Read) registrations)
+    {
+        foreach (var contract in implementation.AllInterfaces.OrderBy(type => type.ToDisplayString(), StringComparer.Ordinal))
+        {
+            if (IsGeneric(contract))
+            {
+                continue;
+            }
+
+            var isWrite = InheritsContract(contract, contracts.Write);
+            var isRead = InheritsContract(contract, contracts.Read);
+            if (!isWrite && !isRead)
+            {
+                continue;
+            }
+
+            var inaccessibleType = IsAccessible(implementation, compilation) ? contract : implementation;
+            if (!IsAccessible(inaccessibleType, compilation))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(InaccessibleRepository, implementation.Locations[0], inaccessibleType.ToDisplayString()));
+                break;
+            }
+
+            if (isWrite)
+            {
+                AppendRegistration(registrations.Write, contract, implementation);
+            }
+
+            if (isRead)
+            {
+                AppendRegistration(registrations.Read, contract, implementation);
+            }
+        }
     }
 
     private static bool InheritsContract(INamedTypeSymbol type, INamedTypeSymbol contract)
