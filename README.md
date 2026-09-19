@@ -20,7 +20,7 @@ The library is intentionally infrastructure-focused. Domain model design, comman
 
 ## Features
 
-- PostgreSQL registration extensions for write/read EF Core infrastructure and scoped repository implementation auto-registration.
+- PostgreSQL registration extensions for write/read EF Core infrastructure and Roslyn-generated scoped repository registration.
 - `WriteDbContext<TDbContext>` with HiLo configuration, optional context-derived schema naming, assembly configuration scanning, and plural table names.
 - `ReadDbContext<TDbContext>` with no-tracking queries, automatic read model registration, optional context-derived schema naming, and migration exclusion for read models.
 - Base `EfRepository<TDbContext, TId, TAggregateRoot>` with async persistence operations integrated with `IAggregateTracker`.
@@ -118,8 +118,24 @@ services.AddPostgreSqlEfRepository<OrdersWriteDbContext, OrdersReadDbContext>(
 The `WriteDbContext`, `ReadDbContext`, and `DbContext` suffixes are removed before conversion to snake_case, so both contexts above use the `orders` schema. Only write DbContexts configure migration history; read DbContexts currently configure table mapping only and are not migration owners.
 
 Use `AddPostgreSqlWriteEfRepository<TWriteDbContext>` when the application only needs write-side infrastructure, or `AddPostgreSqlReadEfRepository<TReadDbContext>` when it only needs read-side infrastructure.
-The registration methods scan DbContext assemblies and register concrete repository implementations as scoped services for non-generic application contracts derived from `IRepository<TId, TAggregateRoot>` or `IReadRepository<TId>`.
-Write repository implementations are discovered from the write DbContext assembly, and read repository implementations are discovered from the read DbContext assembly.
+The bundled Roslyn generator discovers repository implementations at compile time and emits explicit `AddScoped<TContract, TImplementation>` calls. The existing registration methods use these generated registrations without scanning assemblies for repositories at runtime.
+Write repositories are registered from the write DbContext assembly, and read repositories from the read DbContext assembly. Inherited non-generic contracts are included; generic contracts, direct base repository interfaces, abstract implementations, and open generic implementations are ignored. Existing registrations and multiple implementations of the same contract still cause `InvalidOperationException` with the conflicting interface and implementation names.
+
+Each C# project containing a DbContext must reference this NuGet package with its analyzer assets enabled, even when that assembly contains no repositories. No attributes, partial classes, or additional startup calls are required. A generated module initializer supplies the assembly's registration callbacks; the library ensures it has run before using them. The runtime registry is keyed by assembly identity and does not retain collectible assemblies indefinitely.
+
+Repository implementations and their contracts must be accessible from generated code: normally `internal` or `public`, including accessible nested types. Private/protected-only nested and file-local types produce diagnostic `PANEFSG004`. Repositories emitted by another source generator in the same compilation are not discovered; keep those registrations explicit.
+
+When developing with a `ProjectReference` instead of the NuGet package, add the generator project to the DbContext project as an analyzer, because analyzer project references are not transitive:
+
+```xml
+<ProjectReference Include="../PANiXiDA.Core.Infrastructure.Persistence.Ef.Generators/PANiXiDA.Core.Infrastructure.Persistence.Ef.Generators.csproj"
+                  OutputItemType="Analyzer"
+                  ReferenceOutputAssembly="false" />
+```
+
+#### Migration from 4.x
+
+Rebuild every DbContext assembly with the package's generator enabled. Previously compiled assemblies without generated registrations now produce an actionable `InvalidOperationException`; there is no reflection fallback. Move private/protected-only nested or file-local repository types/contracts to an accessible declaration. The public `AddPostgreSql*` signatures, scoped lifetimes, and write/read assembly boundaries are unchanged. Registration order is deterministic by fully qualified type name; when implementations conflict, that order determines the implementation reported. No database migration or connection-string change is required.
 
 Each write registration exposes its `IUnitOfWork` under the write `DbContext` type as a keyed service:
 
@@ -269,7 +285,7 @@ var items = await query.ToListAsync(cancellationToken);
 - Deleted entities that have `DeletedAt` are converted to modified entities and receive `DeletedAt` and `UpdatedAt`.
 - `AuditableReadDbModel<TId>` and auditable write configurations apply a query filter that hides rows where `DeletedAt` is not null.
 - `EfReadRepository` sorts by projected read model fields through generated typed selectors. Unsupported fields and directions are rejected; sorting does not discover members through runtime reflection.
-- Repository implementation scanning registers concrete, non-abstract, non-generic classes against non-generic contracts that inherit `IRepository<TId, TAggregateRoot>` or `IReadRepository<TId>`. Direct base generic repository interfaces are intentionally ignored.
+- Repository registration is generated at compile time. Read-model registration, EF configuration discovery, and other remaining reflection are documented in [Reflection inventory](docs/reflection-inventory.md). This change does not establish Native AOT support for the package.
 
 ## Project Structure
 
