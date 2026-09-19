@@ -24,7 +24,7 @@ public sealed class RepositoryRegistrationGeneratorTests
             public interface IChild : IParent { }
             public abstract class Base<T> : ReadBase<int>, IChild { }
             internal sealed partial class Repository : Base<int> { }
-            internal sealed partial class Repository { }
+            internal sealed partial class Repository : Base<int> { }
             """);
 
         var generated = result.GeneratedSources.Should().ContainSingle().Subject.SourceText.ToString();
@@ -92,6 +92,41 @@ public sealed class RepositoryRegistrationGeneratorTests
             .And.Contain("EnsureNotRegistered(services, typeof(global::IContract), typeof(global::BRepository))");
         generated.IndexOf("typeof(global::ARepository)", StringComparison.Ordinal).Should()
             .BeLessThan(generated.IndexOf("typeof(global::BRepository)", StringComparison.Ordinal));
+    }
+
+    [Fact(DisplayName = "Repository generator includes a shared contract in both write and read registrations")]
+    public void Generate_RegistersWriteAndReadContract()
+    {
+        var result = Generate("""
+            public readonly record struct Id(System.Guid Value) : PANiXiDA.Core.Domain.Identifiers.IStronglyTypedId;
+            public sealed class Aggregate(Id id) : PANiXiDA.Core.Domain.AggregateRoots.AggregateRoot<Id>(id) { }
+            public interface IContract : PANiXiDA.Core.Domain.Abstractions.IRepository<Id, Aggregate>, IReadRepository<int> { }
+            public sealed class Repository : ReadBase<int>, IContract
+            {
+                public Task<Aggregate?> GetByIdAsync(Id id, CancellationToken cancellationToken)
+                {
+                    return Task.FromResult<Aggregate?>(null);
+                }
+
+                public Task AddAsync(Aggregate aggregateRoot, CancellationToken cancellationToken)
+                {
+                    return Task.CompletedTask;
+                }
+
+                public Task UpdateAsync(Aggregate aggregateRoot, CancellationToken cancellationToken)
+                {
+                    return Task.CompletedTask;
+                }
+
+                public Task DeleteAsync(Aggregate aggregateRoot, CancellationToken cancellationToken)
+                {
+                    return Task.CompletedTask;
+                }
+            }
+            """);
+
+        var generated = result.GeneratedSources.Single().SourceText.ToString();
+        generated.Split("AddScoped<global::IContract, global::Repository>(services)").Should().HaveCount(3);
     }
 
     [Fact(DisplayName = "Repository generator ignores projects without the runtime registry")]
