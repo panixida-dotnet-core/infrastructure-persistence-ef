@@ -3,8 +3,8 @@ using System.Runtime.Loader;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.Extensions.DependencyInjection;
-using PANiXiDA.Core.Infrastructure.Persistence.Ef.Extensions;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Generators.Registries;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Registries;
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.UnitTests.Generators.Registries;
 
@@ -164,7 +164,7 @@ public sealed class RepositoryRegistrationGeneratorTests
             var dependency = assembly.GetType("Dependency", throwOnError: true)!;
             services.AddScoped(dependency);
 
-            services.AddReadRepositoryImplementationsFromAssembly(assembly);
+            RepositoryRegistry.GetRegistration(assembly).RegisterReadRepositories(services);
 
             var descriptor = services.Should().ContainSingle(item => item.ServiceType.Name == "IContract").Subject;
             descriptor.Lifetime.Should().Be(ServiceLifetime.Scoped);
@@ -198,7 +198,7 @@ public sealed class RepositoryRegistrationGeneratorTests
             var assembly = loadContext.LoadFromStream(stream);
             var services = new ServiceCollection();
 
-            var act = () => services.AddReadRepositoryImplementationsFromAssembly(assembly);
+            var act = () => RepositoryRegistry.GetRegistration(assembly).RegisterReadRepositories(services);
 
             act.Should().Throw<InvalidOperationException>()
                 .WithMessage("Repository interface 'IContract' is already registered. Conflicting implementation: 'BRepository'.");

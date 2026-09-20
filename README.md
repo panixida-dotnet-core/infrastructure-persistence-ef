@@ -133,7 +133,7 @@ When developing with a `ProjectReference` instead of the NuGet package, add the 
                   ReferenceOutputAssembly="false" />
 ```
 
-#### Migration from 4.x
+#### Updating to 4.1
 
 Rebuild every DbContext assembly with the package's generator enabled. Previously compiled assemblies without generated registrations now produce an actionable `InvalidOperationException`; there is no reflection fallback. Move private/protected-only nested or file-local repository types/contracts to an accessible declaration. The public `AddPostgreSql*` signatures, scoped lifetimes, and write/read assembly boundaries are unchanged. Registration order is deterministic by fully qualified type name; when implementations conflict, that order determines the implementation reported. No database migration or connection-string change is required.
 

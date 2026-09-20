@@ -7,8 +7,8 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using PANiXiDA.Core.Application.Persistence;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Constants;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.DbContexts;
-using PANiXiDA.Core.Infrastructure.Persistence.Ef.Extensions;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Interceptors;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Registries;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Tracking;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Write;
 
@@ -43,8 +43,8 @@ public static class ServiceCollectionExtensions
             connectionString);
 
         RegisterWriteEfInfrastructure<TWriteDbContext>(serviceCollection);
-        serviceCollection.AddWriteRepositoryImplementationsFromAssembly(typeof(TWriteDbContext).Assembly);
-        serviceCollection.AddReadRepositoryImplementationsFromAssembly(typeof(TReadDbContext).Assembly);
+        RepositoryRegistry.GetRegistration(typeof(TWriteDbContext).Assembly).RegisterWriteRepositories(serviceCollection);
+        RepositoryRegistry.GetRegistration(typeof(TReadDbContext).Assembly).RegisterReadRepositories(serviceCollection);
 
         return serviceCollection;
     }
@@ -67,7 +67,7 @@ public static class ServiceCollectionExtensions
             serviceCollection,
             connectionString);
         RegisterWriteEfInfrastructure<TWriteDbContext>(serviceCollection);
-        serviceCollection.AddWriteRepositoryImplementationsFromAssembly(typeof(TWriteDbContext).Assembly);
+        RepositoryRegistry.GetRegistration(typeof(TWriteDbContext).Assembly).RegisterWriteRepositories(serviceCollection);
 
         return serviceCollection;
     }
@@ -89,7 +89,7 @@ public static class ServiceCollectionExtensions
         RegisterReadDbContext<TReadDbContext>(
             serviceCollection,
             connectionString);
-        serviceCollection.AddReadRepositoryImplementationsFromAssembly(typeof(TReadDbContext).Assembly);
+        RepositoryRegistry.GetRegistration(typeof(TReadDbContext).Assembly).RegisterReadRepositories(serviceCollection);
 
         return serviceCollection;
     }
