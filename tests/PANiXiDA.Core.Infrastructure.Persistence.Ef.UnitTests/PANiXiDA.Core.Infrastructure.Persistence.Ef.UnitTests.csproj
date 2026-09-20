@@ -22,6 +22,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="../../src/PANiXiDA.Core.Infrastructure.Persistence.Ef.Generators/PANiXiDA.Core.Infrastructure.Persistence.Ef.Generators.csproj" />
+        <ProjectReference Include="../../src/PANiXiDA.Core.Infrastructure.Persistence.Ef.Generators/PANiXiDA.Core.Infrastructure.Persistence.Ef.Generators.csproj"
+                          OutputItemType="Analyzer" ReferenceOutputAssembly="true" />
     </ItemGroup>
 </Project>

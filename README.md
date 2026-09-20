@@ -20,7 +20,7 @@ The library is intentionally infrastructure-focused. Domain model design, comman
 
 ## Features
 
-- PostgreSQL registration extensions for write/read EF Core infrastructure and scoped repository implementation auto-registration.
+- PostgreSQL registration extensions for write/read EF Core infrastructure and automatic scoped repository registration.
 - `WriteDbContext<TDbContext>` with HiLo configuration, optional context-derived schema naming, assembly configuration scanning, and plural table names.
 - `ReadDbContext<TDbContext>` with no-tracking queries, automatic read model registration, optional context-derived schema naming, and migration exclusion for read models.
 - Base `EfRepository<TDbContext, TId, TAggregateRoot>` with async persistence operations integrated with `IAggregateTracker`.
@@ -40,6 +40,8 @@ The library is intentionally infrastructure-focused. Domain model design, comman
 - Docker for local integration tests because they use Testcontainers with PostgreSQL
 
 ### Installation
+
+Install the package in each project containing a DbContext and keep its analyzer assets enabled.
 
 ```bash
 dotnet add package PANiXiDA.Core.Infrastructure.Persistence.Ef
@@ -118,8 +120,10 @@ services.AddPostgreSqlEfRepository<OrdersWriteDbContext, OrdersReadDbContext>(
 The `WriteDbContext`, `ReadDbContext`, and `DbContext` suffixes are removed before conversion to snake_case, so both contexts above use the `orders` schema. Only write DbContexts configure migration history; read DbContexts currently configure table mapping only and are not migration owners.
 
 Use `AddPostgreSqlWriteEfRepository<TWriteDbContext>` when the application only needs write-side infrastructure, or `AddPostgreSqlReadEfRepository<TReadDbContext>` when it only needs read-side infrastructure.
-The registration methods scan DbContext assemblies and register concrete repository implementations as scoped services for non-generic application contracts derived from `IRepository<TId, TAggregateRoot>` or `IReadRepository<TId>`.
-Write repository implementations are discovered from the write DbContext assembly, and read repository implementations are discovered from the read DbContext assembly.
+
+Repositories are registered automatically as scoped services. Keep write repositories in the write DbContext assembly and read repositories in the read DbContext assembly.
+
+Use concrete, non-generic `internal` or `public` implementations and `internal` or `public` non-generic interfaces derived from `IRepository<TId, TAggregateRoot>` or `IReadRepository<TId>`. Register each repository contract only once.
 
 Each write registration exposes its `IUnitOfWork` under the write `DbContext` type as a keyed service:
 
@@ -269,7 +273,6 @@ var items = await query.ToListAsync(cancellationToken);
 - Deleted entities that have `DeletedAt` are converted to modified entities and receive `DeletedAt` and `UpdatedAt`.
 - `AuditableReadDbModel<TId>` and auditable write configurations apply a query filter that hides rows where `DeletedAt` is not null.
 - `EfReadRepository` sorts by projected read model fields through generated typed selectors. Unsupported fields and directions are rejected; sorting does not discover members through runtime reflection.
-- Repository implementation scanning registers concrete, non-abstract, non-generic classes against non-generic contracts that inherit `IRepository<TId, TAggregateRoot>` or `IReadRepository<TId>`. Direct base generic repository interfaces are intentionally ignored.
 
 ## Project Structure
 
