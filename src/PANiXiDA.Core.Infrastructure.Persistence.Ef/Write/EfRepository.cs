@@ -18,6 +18,7 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Write;
 /// <typeparam name="TAggregateRoot">The aggregate root type.</typeparam>
 /// <param name="dbContext">The DbContext used by the repository.</param>
 /// <param name="aggregateTracker">The tracker used to collect touched aggregate roots.</param>
+[SuppressMessage("Design", "S2436", Justification = "The existing repository contract independently specifies the DbContext, identifier and aggregate types.")]
 public abstract class EfRepository<TDbContext, TId,
     [DynamicallyAccessedMembers(TrimmingConstants.EntityMembers)] TAggregateRoot>(
     TDbContext dbContext,
