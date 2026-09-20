@@ -10,7 +10,7 @@ internal static class RepositoryRegistrationExtensions
         this IServiceCollection serviceCollection,
         Assembly assembly)
     {
-        RepositoryRegistr.GetRegistration(assembly).RegisterWriteRepositories(serviceCollection);
+        RepositoryRegistry.GetRegistration(assembly).RegisterWriteRepositories(serviceCollection);
         return serviceCollection;
     }
 
@@ -18,7 +18,7 @@ internal static class RepositoryRegistrationExtensions
         this IServiceCollection serviceCollection,
         Assembly assembly)
     {
-        RepositoryRegistr.GetRegistration(assembly).RegisterReadRepositories(serviceCollection);
+        RepositoryRegistry.GetRegistration(assembly).RegisterReadRepositories(serviceCollection);
         return serviceCollection;
     }
 }

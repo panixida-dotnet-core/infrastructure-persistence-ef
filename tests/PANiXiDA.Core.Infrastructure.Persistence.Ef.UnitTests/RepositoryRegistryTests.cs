@@ -6,12 +6,12 @@ using PANiXiDA.Core.Infrastructure.Persistence.Ef.Extensions;
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.UnitTests;
 
-public sealed class RepositoryRegistrTests
+public sealed class RepositoryRegistryTests
 {
     [Fact(DisplayName = "Generated repository registry rejects null assembly")]
     public void RegisterAssembly_RejectsNullAssembly()
     {
-        var act = () => RepositoryRegistr.RegisterAssembly(null!, _ => { }, _ => { });
+        var act = () => RepositoryRegistry.RegisterAssembly(null!, _ => { }, _ => { });
 
         act.Should().Throw<ArgumentNullException>().WithParameterName("assembly");
     }
@@ -19,7 +19,7 @@ public sealed class RepositoryRegistrTests
     [Fact(DisplayName = "Generated repository registry rejects null write callback")]
     public void RegisterAssembly_RejectsNullWriteCallback()
     {
-        var act = () => RepositoryRegistr.RegisterAssembly(typeof(RepositoryRegistrTests).Assembly, null!, _ => { });
+        var act = () => RepositoryRegistry.RegisterAssembly(typeof(RepositoryRegistryTests).Assembly, null!, _ => { });
 
         act.Should().Throw<ArgumentNullException>().WithParameterName("registerWriteRepositories");
     }
@@ -27,7 +27,7 @@ public sealed class RepositoryRegistrTests
     [Fact(DisplayName = "Generated repository registry rejects null read callback")]
     public void RegisterAssembly_RejectsNullReadCallback()
     {
-        var act = () => RepositoryRegistr.RegisterAssembly(typeof(RepositoryRegistrTests).Assembly, _ => { }, null!);
+        var act = () => RepositoryRegistry.RegisterAssembly(typeof(RepositoryRegistryTests).Assembly, _ => { }, null!);
 
         act.Should().Throw<ArgumentNullException>().WithParameterName("registerReadRepositories");
     }
@@ -36,9 +36,9 @@ public sealed class RepositoryRegistrTests
     public void RegisterAssembly_RejectsDuplicateAssembly()
     {
         var assembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName(Guid.NewGuid().ToString()), AssemblyBuilderAccess.RunAndCollect);
-        RepositoryRegistr.RegisterAssembly(assembly, _ => { }, _ => { });
+        RepositoryRegistry.RegisterAssembly(assembly, _ => { }, _ => { });
 
-        var act = () => RepositoryRegistr.RegisterAssembly(assembly, _ => { }, _ => { });
+        var act = () => RepositoryRegistry.RegisterAssembly(assembly, _ => { }, _ => { });
 
         act.Should().Throw<ArgumentException>();
     }

@@ -10,7 +10,7 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Registrations;
 /// This API is intended for source-generated code.
 /// </summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
-public static class RepositoryRegistr
+public static class RepositoryRegistry
 {
     private static readonly ConditionalWeakTable<Assembly, Registration> Registrations = new();
 
