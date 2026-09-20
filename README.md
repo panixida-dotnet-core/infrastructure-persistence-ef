@@ -177,6 +177,8 @@ public sealed class OrderRepository(
 }
 ```
 
+`WriteDbContext` applies concrete `IEntityTypeConfiguration<TEntity>` implementations from its assembly through the bundled source generator. Keep configuration and entity types `internal` or `public`, and give configurations a parameterless constructor; non-public constructors are supported. Abstract types, open generic types and configurations without a parameterless constructor are skipped. No attributes, partial classes or additional registration calls are needed. Overrides of `ConfigureEntity`, `ConfigureAudit`, `ConfigureSoftDelete` and `IsSoftDeleteEnabled` work as usual.
+
 `EfRepository` persists aggregate roots through `AddAsync`, `UpdateAsync`, and `DeleteAsync`, and tracks touched aggregate roots through `IAggregateTracker`. The built-in write registration adds the generic `AggregateTracker` implementation as scoped, but consumers can register their own tracker before calling the EF registration methods. When a unit-of-work transaction is active, repository saves participate in that transaction and `EfUnitOfWork` commits or rolls it back.
 
 ### Read Models

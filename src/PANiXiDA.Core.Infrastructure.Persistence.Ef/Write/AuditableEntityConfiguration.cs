@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using System.Diagnostics.CodeAnalysis;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Constants;
@@ -9,7 +10,8 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Write;
 /// Provides base configuration for an auditable entity with audit shadow properties and soft-delete support.
 /// </summary>
 /// <typeparam name="TEntity">The entity type to configure.</typeparam>
-public abstract class AuditableEntityConfiguration<TEntity> : IEntityTypeConfiguration<TEntity>
+public abstract class AuditableEntityConfiguration<
+    [DynamicallyAccessedMembers(TrimmingConstants.EntityMembers)] TEntity> : IEntityTypeConfiguration<TEntity>
     where TEntity : class
 {
     /// <summary>

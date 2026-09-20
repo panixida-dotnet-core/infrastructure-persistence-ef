@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using System.Diagnostics.CodeAnalysis;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,7 +28,9 @@ public static class ServiceCollectionExtensions
     /// <param name="serviceCollection">The service collection to register services into.</param>
     /// <param name="configuration">The application configuration that contains the PostgreSQL connection string.</param>
     /// <returns>The same service collection after registration.</returns>
-    public static IServiceCollection AddPostgreSqlEfRepository<TWriteDbContext, TReadDbContext>(
+    public static IServiceCollection AddPostgreSqlEfRepository<
+        [DynamicallyAccessedMembers(TrimmingConstants.DbContextMembers)] TWriteDbContext,
+        [DynamicallyAccessedMembers(TrimmingConstants.DbContextMembers)] TReadDbContext>(
         this IServiceCollection serviceCollection,
         IConfiguration configuration)
         where TWriteDbContext : WriteDbContext<TWriteDbContext>
@@ -56,7 +59,8 @@ public static class ServiceCollectionExtensions
     /// <param name="serviceCollection">The service collection to register services into.</param>
     /// <param name="configuration">The application configuration that contains the PostgreSQL connection string.</param>
     /// <returns>The same service collection after registration.</returns>
-    public static IServiceCollection AddPostgreSqlWriteEfRepository<TWriteDbContext>(
+    public static IServiceCollection AddPostgreSqlWriteEfRepository<
+        [DynamicallyAccessedMembers(TrimmingConstants.DbContextMembers)] TWriteDbContext>(
         this IServiceCollection serviceCollection,
         IConfiguration configuration)
         where TWriteDbContext : WriteDbContext<TWriteDbContext>
@@ -79,7 +83,8 @@ public static class ServiceCollectionExtensions
     /// <param name="serviceCollection">The service collection to register services into.</param>
     /// <param name="configuration">The application configuration that contains the PostgreSQL connection string.</param>
     /// <returns>The same service collection after registration.</returns>
-    public static IServiceCollection AddPostgreSqlReadEfRepository<TReadDbContext>(
+    public static IServiceCollection AddPostgreSqlReadEfRepository<
+        [DynamicallyAccessedMembers(TrimmingConstants.DbContextMembers)] TReadDbContext>(
         this IServiceCollection serviceCollection,
         IConfiguration configuration)
         where TReadDbContext : ReadDbContext<TReadDbContext>
@@ -94,7 +99,8 @@ public static class ServiceCollectionExtensions
         return serviceCollection;
     }
 
-    private static void RegisterWriteDbContext<TWriteDbContext>(
+    private static void RegisterWriteDbContext<
+        [DynamicallyAccessedMembers(TrimmingConstants.DbContextMembers)] TWriteDbContext>(
         IServiceCollection serviceCollection,
         string connectionString)
         where TWriteDbContext : WriteDbContext<TWriteDbContext>
@@ -106,7 +112,8 @@ public static class ServiceCollectionExtensions
         });
     }
 
-    private static void RegisterReadDbContext<TReadDbContext>(
+    private static void RegisterReadDbContext<
+        [DynamicallyAccessedMembers(TrimmingConstants.DbContextMembers)] TReadDbContext>(
         IServiceCollection serviceCollection,
         string connectionString)
         where TReadDbContext : ReadDbContext<TReadDbContext>
