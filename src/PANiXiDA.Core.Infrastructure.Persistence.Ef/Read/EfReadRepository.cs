@@ -20,7 +20,6 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Read;
 /// <typeparam name="TId">The read model identifier type.</typeparam>
 /// <typeparam name="TReadDbModel">The database read model type.</typeparam>
 /// <param name="dbContext">The read DbContext used by the repository.</param>
-[SuppressMessage("Design", "S2436", Justification = "The existing repository contract independently specifies the DbContext, identifier and read model types.")]
 public abstract class EfReadRepository
     <TDbContext, TId,
         [DynamicallyAccessedMembers(TrimmingConstants.EntityMembers)] TReadDbModel>(TDbContext dbContext) : IReadRepository<TId>
