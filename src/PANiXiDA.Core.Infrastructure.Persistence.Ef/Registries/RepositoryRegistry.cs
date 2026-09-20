@@ -12,7 +12,7 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Registries;
 [EditorBrowsable(EditorBrowsableState.Never)]
 public static class RepositoryRegistry
 {
-    private static readonly ConditionalWeakTable<Assembly, Registration> Registrations = new();
+    private static readonly ConditionalWeakTable<Assembly, Registration> Registrations = [];
 
     /// <summary>
     /// Registers the generated repository callbacks for an assembly.
