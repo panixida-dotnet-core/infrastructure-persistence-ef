@@ -26,6 +26,9 @@ public sealed class ReadDbModelRegistrationGeneratorTests
             internal sealed partial class OrderReadDbModel : Middle { }
             public class Category : ReadDbModel<int> { }
             public class Unrelated { }
+            public interface IMarker { }
+            public interface IChild : IMarker { }
+            public struct Value : IMarker { }
             """);
 
         var source = result.GeneratedSources.Should().ContainSingle().Subject.SourceText.ToString();
@@ -35,6 +38,8 @@ public sealed class ReadDbModelRegistrationGeneratorTests
             .And.Contain("entity.HasQueryFilter(item => item.DeletedAt == null)")
             .And.NotContain("Entity<global::Middle>")
             .And.NotContain("Entity<global::Unrelated>")
+            .And.NotContain("Entity<global::IChild>")
+            .And.NotContain("Entity<global::Value>")
             .And.NotContain("GetTypes(")
             .And.NotContain("Expression.Property(")
             .And.NotContain("MakeGenericType(");
