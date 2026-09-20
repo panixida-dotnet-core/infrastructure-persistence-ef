@@ -4,9 +4,9 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.Extensions.DependencyInjection;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Extensions;
-using PANiXiDA.Core.Infrastructure.Persistence.Ef.Generators.DependencyInjection;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Generators.Registries;
 
-namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.UnitTests.Generators.DependencyInjection;
+namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.UnitTests.Generators.Registries;
 
 public sealed class RepositoryRegistrationGeneratorTests
 {

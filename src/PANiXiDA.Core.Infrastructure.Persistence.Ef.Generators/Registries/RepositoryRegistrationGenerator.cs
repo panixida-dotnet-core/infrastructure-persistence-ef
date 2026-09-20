@@ -4,7 +4,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 
-namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Generators.DependencyInjection;
+namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Generators.Registries;
 
 /// <summary>
 /// Generates scoped repository registrations for the consuming assembly.
@@ -12,7 +12,7 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Generators.DependencyInjec
 [Generator(LanguageNames.CSharp)]
 public sealed class RepositoryRegistrationGenerator : IIncrementalGenerator
 {
-    private const string RegistryName = "PANiXiDA.Core.Infrastructure.Persistence.Ef.Registrations.RepositoryRegistry";
+    private const string RegistryName = "PANiXiDA.Core.Infrastructure.Persistence.Ef.Registries.RepositoryRegistry";
 
     private static readonly DiagnosticDescriptor InaccessibleRepository = new(
         "PANEFSG004", "Repository registration requires accessible types",

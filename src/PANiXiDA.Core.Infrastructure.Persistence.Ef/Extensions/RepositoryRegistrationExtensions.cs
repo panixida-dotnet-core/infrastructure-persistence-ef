@@ -1,6 +1,6 @@
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
-using PANiXiDA.Core.Infrastructure.Persistence.Ef.Registrations;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Registries;
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Extensions;
 

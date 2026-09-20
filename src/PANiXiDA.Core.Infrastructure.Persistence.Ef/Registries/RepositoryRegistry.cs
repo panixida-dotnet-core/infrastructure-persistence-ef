@@ -3,7 +3,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Registrations;
+namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Registries;
 
 /// <summary>
 /// Connects generated assembly registrations to the persistence registration extensions.

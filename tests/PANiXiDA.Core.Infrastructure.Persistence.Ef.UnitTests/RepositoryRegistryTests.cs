@@ -1,7 +1,7 @@
 using System.Reflection;
 using System.Reflection.Emit;
 using Microsoft.Extensions.DependencyInjection;
-using PANiXiDA.Core.Infrastructure.Persistence.Ef.Registrations;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Registries;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Extensions;
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.UnitTests;
