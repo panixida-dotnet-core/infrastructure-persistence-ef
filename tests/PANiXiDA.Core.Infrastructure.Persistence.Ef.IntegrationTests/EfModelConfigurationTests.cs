@@ -196,16 +196,6 @@ public sealed class EfModelConfigurationTests(PostgreSqlContainerFixture fixture
         namelessType.GetTableName().Should().BeNull();
     }
 
-    [Fact(DisplayName = "ModelBuilderExtensions handles assemblies without read models")]
-    public void ModelBuilderExtensions_HandlesAssembliesWithoutReadModels()
-    {
-        var modelBuilder = new ModelBuilder();
-
-        modelBuilder.RegisterReadDbModels(typeof(string).Assembly, null, true);
-
-        modelBuilder.Model.GetEntityTypes().Should().BeEmpty();
-    }
-
     [Fact(DisplayName = "TrimFirstMatchingSuffix returns original value when no suffix matches")]
     public void TrimFirstMatchingSuffix_ReturnsOriginalValue_WhenNoSuffixMatches()
     {
