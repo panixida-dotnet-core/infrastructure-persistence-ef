@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Extensions;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Registries;
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.DbContexts;
 
@@ -40,12 +41,10 @@ public abstract class ReadDbContext<TDbContext>(
             ? GetSchemaName()
             : null;
 
-        modelBuilder.RegisterReadDbModels(
-            typeof(TDbContext).Assembly,
+        ReadDbModelRegistry.GetRegistration(typeof(TDbContext).Assembly)(
+            modelBuilder,
             schemaName,
             ExcludeReadModelsFromMigrations);
-
-        modelBuilder.ConfigureAuditableReadDbModels();
     }
 
     private static string GetSchemaName()

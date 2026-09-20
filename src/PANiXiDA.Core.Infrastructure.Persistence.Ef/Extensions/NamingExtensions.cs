@@ -12,13 +12,6 @@ internal static class NamingExtensions
             .ToLowerInvariant();
     }
 
-    public static string ToTableName(this Type modelType, params string[] suffixes)
-    {
-        return modelType.Name
-            .TrimFirstMatchingSuffix(suffixes)
-            .ToPluralTableName();
-    }
-
     public static string ToPluralTableName(this string tableName)
     {
         return tableName

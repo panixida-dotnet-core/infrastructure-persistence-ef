@@ -211,7 +211,7 @@ public sealed partial class OrderReadModelSorting : IReadModelSorting<OrderReadM
 }
 ```
 
-Concrete `ReadDbModel<TId>` types in the read DbContext assembly are registered automatically. By default they are mapped as no-tracking models and excluded from migrations, which is useful when read models point to tables or views owned by another context.
+Keep concrete, non-generic `internal` or `public` `ReadDbModel<TId>` types in the read DbContext project and reference this package there with analyzers enabled. The bundled generator registers them automatically and adds a typed soft-delete filter for `AuditableReadDbModel<TId>`; no extra startup calls or attributes are required. By default they are mapped as no-tracking models and excluded from migrations, which is useful when read models point to tables or views owned by another context.
 
 The package generates `ApplySorting` for partial `IReadModelSorting<TReadModel>` implementations from public scalar properties, including nested paths such as `department.name`. At the first repeated type, scalar fields such as `manager.name` remain available; further nesting stops. CLR and camelCase paths are matched ignoring case. `DefaultSorting` is required; use `SortingParameters.None` for no defaults. Client criteria take precedence, and missing default fields are appended automatically.
 
