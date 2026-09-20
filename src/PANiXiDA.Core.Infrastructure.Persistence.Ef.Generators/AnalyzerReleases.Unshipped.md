@@ -8,3 +8,4 @@ PANEFSG003 | Sorting | Error | Sorting field paths must be unambiguous ignoring 
 PANEFSG004 | RepositoryRegistration | Error | Repository types and contracts must be accessible from generated code
 PANEFSG005 | ReadDbModelRegistration | Error | Read models must be accessible from generated code
 PANEFSG006 | ReadDbModelRegistration | Error | Read models must not be open generic types
+PANEFSG007 | EntityConfigurationRegistration | Error | Entity configurations and their entity types must be accessible from generated code

@@ -1,9 +1,11 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using System.Diagnostics.CodeAnalysis;
+using Microsoft.EntityFrameworkCore;
 
 using PANiXiDA.Core.Application.Persistence;
 using PANiXiDA.Core.Domain.Abstractions;
 using PANiXiDA.Core.Domain.AggregateRoots;
 using PANiXiDA.Core.Domain.Identifiers;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Constants;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.DbContexts;
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Write;
@@ -16,7 +18,8 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Write;
 /// <typeparam name="TAggregateRoot">The aggregate root type.</typeparam>
 /// <param name="dbContext">The DbContext used by the repository.</param>
 /// <param name="aggregateTracker">The tracker used to collect touched aggregate roots.</param>
-public abstract class EfRepository<TDbContext, TId, TAggregateRoot>(
+public abstract class EfRepository<TDbContext, TId,
+    [DynamicallyAccessedMembers(TrimmingConstants.EntityMembers)] TAggregateRoot>(
     TDbContext dbContext,
     IAggregateTracker aggregateTracker) : IRepository<TId, TAggregateRoot>
     where TDbContext : WriteDbContext<TDbContext>

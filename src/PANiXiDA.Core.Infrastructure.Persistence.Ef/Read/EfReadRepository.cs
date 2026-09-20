@@ -1,9 +1,11 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using System.Diagnostics.CodeAnalysis;
+using Microsoft.EntityFrameworkCore;
 
 using PANiXiDA.Core.Application.Persistence;
 using PANiXiDA.Core.Application.Querying.Cursor;
 using PANiXiDA.Core.Application.Querying.Pagination;
 using PANiXiDA.Core.Application.Querying.Sorting;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Constants;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.DbContexts;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Mapping;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Models;
@@ -19,7 +21,8 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Read;
 /// <typeparam name="TReadDbModel">The database read model type.</typeparam>
 /// <param name="dbContext">The read DbContext used by the repository.</param>
 public abstract class EfReadRepository
-    <TDbContext, TId, TReadDbModel>(TDbContext dbContext) : IReadRepository<TId>
+    <TDbContext, TId,
+        [DynamicallyAccessedMembers(TrimmingConstants.EntityMembers)] TReadDbModel>(TDbContext dbContext) : IReadRepository<TId>
     where TDbContext : ReadDbContext<TDbContext>
     where TId : struct
     where TReadDbModel : ReadDbModel<TId>

@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Extensions;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Registries;
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.DbContexts;
 
@@ -56,7 +57,7 @@ public abstract class WriteDbContext<TDbContext>(
             modelBuilder.HasDefaultSchema(GetSchemaName());
         }
 
-        modelBuilder.ApplyConfigurationsFromAssembly(typeof(TDbContext).Assembly);
+        EntityConfigurationRegistry.GetRegistration(typeof(TDbContext).Assembly)(modelBuilder);
 
         if (UsePluralTableNames)
         {
