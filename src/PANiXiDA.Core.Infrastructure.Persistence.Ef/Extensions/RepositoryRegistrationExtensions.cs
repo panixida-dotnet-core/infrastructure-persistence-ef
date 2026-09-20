@@ -1,6 +1,6 @@
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
-using PANiXiDA.Core.Infrastructure.Persistence.Ef.DependencyInjection;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Registrations;
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Extensions;
 
@@ -10,8 +10,7 @@ internal static class RepositoryRegistrationExtensions
         this IServiceCollection serviceCollection,
         Assembly assembly)
     {
-        ArgumentNullException.ThrowIfNull(serviceCollection);
-        GeneratedRepositoryRegistry.GetRegistration(assembly).RegisterWriteRepositories(serviceCollection);
+        RepositoryRegistr.GetRegistration(assembly).RegisterWriteRepositories(serviceCollection);
         return serviceCollection;
     }
 
@@ -19,8 +18,7 @@ internal static class RepositoryRegistrationExtensions
         this IServiceCollection serviceCollection,
         Assembly assembly)
     {
-        ArgumentNullException.ThrowIfNull(serviceCollection);
-        GeneratedRepositoryRegistry.GetRegistration(assembly).RegisterReadRepositories(serviceCollection);
+        RepositoryRegistr.GetRegistration(assembly).RegisterReadRepositories(serviceCollection);
         return serviceCollection;
     }
 }

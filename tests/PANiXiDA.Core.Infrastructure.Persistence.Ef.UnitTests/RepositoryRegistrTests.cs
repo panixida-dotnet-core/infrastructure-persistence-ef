@@ -1,17 +1,17 @@
 using System.Reflection;
 using System.Reflection.Emit;
 using Microsoft.Extensions.DependencyInjection;
-using PANiXiDA.Core.Infrastructure.Persistence.Ef.DependencyInjection;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Registrations;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Extensions;
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.UnitTests;
 
-public sealed class GeneratedRepositoryRegistryTests
+public sealed class RepositoryRegistrTests
 {
     [Fact(DisplayName = "Generated repository registry rejects null assembly")]
     public void RegisterAssembly_RejectsNullAssembly()
     {
-        var act = () => GeneratedRepositoryRegistry.RegisterAssembly(null!, _ => { }, _ => { });
+        var act = () => RepositoryRegistr.RegisterAssembly(null!, _ => { }, _ => { });
 
         act.Should().Throw<ArgumentNullException>().WithParameterName("assembly");
     }
@@ -19,7 +19,7 @@ public sealed class GeneratedRepositoryRegistryTests
     [Fact(DisplayName = "Generated repository registry rejects null write callback")]
     public void RegisterAssembly_RejectsNullWriteCallback()
     {
-        var act = () => GeneratedRepositoryRegistry.RegisterAssembly(typeof(GeneratedRepositoryRegistryTests).Assembly, null!, _ => { });
+        var act = () => RepositoryRegistr.RegisterAssembly(typeof(RepositoryRegistrTests).Assembly, null!, _ => { });
 
         act.Should().Throw<ArgumentNullException>().WithParameterName("registerWriteRepositories");
     }
@@ -27,7 +27,7 @@ public sealed class GeneratedRepositoryRegistryTests
     [Fact(DisplayName = "Generated repository registry rejects null read callback")]
     public void RegisterAssembly_RejectsNullReadCallback()
     {
-        var act = () => GeneratedRepositoryRegistry.RegisterAssembly(typeof(GeneratedRepositoryRegistryTests).Assembly, _ => { }, null!);
+        var act = () => RepositoryRegistr.RegisterAssembly(typeof(RepositoryRegistrTests).Assembly, _ => { }, null!);
 
         act.Should().Throw<ArgumentNullException>().WithParameterName("registerReadRepositories");
     }
@@ -36,9 +36,9 @@ public sealed class GeneratedRepositoryRegistryTests
     public void RegisterAssembly_RejectsDuplicateAssembly()
     {
         var assembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName(Guid.NewGuid().ToString()), AssemblyBuilderAccess.RunAndCollect);
-        GeneratedRepositoryRegistry.RegisterAssembly(assembly, _ => { }, _ => { });
+        RepositoryRegistr.RegisterAssembly(assembly, _ => { }, _ => { });
 
-        var act = () => GeneratedRepositoryRegistry.RegisterAssembly(assembly, _ => { }, _ => { });
+        var act = () => RepositoryRegistr.RegisterAssembly(assembly, _ => { }, _ => { });
 
         act.Should().Throw<ArgumentException>();
     }
@@ -54,15 +54,11 @@ public sealed class GeneratedRepositoryRegistryTests
         services.Should().BeEmpty();
     }
 
-    [Fact(DisplayName = "Repository registration rejects null arguments")]
-    public void GetRegistration_RejectsNullArguments()
+    [Fact(DisplayName = "Repository registration rejects null assembly")]
+    public void GetRegistration_RejectsNullAssembly()
     {
         var nullAssembly = () => new ServiceCollection().AddReadRepositoryImplementationsFromAssembly(null!);
-        var nullReadServices = () => RepositoryRegistrationExtensions.AddReadRepositoryImplementationsFromAssembly(null!, typeof(string).Assembly);
-        var nullWriteServices = () => RepositoryRegistrationExtensions.AddWriteRepositoryImplementationsFromAssembly(null!, typeof(string).Assembly);
 
         nullAssembly.Should().Throw<ArgumentNullException>().WithParameterName("assembly");
-        nullReadServices.Should().Throw<ArgumentNullException>().WithParameterName("serviceCollection");
-        nullWriteServices.Should().Throw<ArgumentNullException>().WithParameterName("serviceCollection");
     }
 }

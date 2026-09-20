@@ -285,7 +285,7 @@ var items = await query.ToListAsync(cancellationToken);
 - Deleted entities that have `DeletedAt` are converted to modified entities and receive `DeletedAt` and `UpdatedAt`.
 - `AuditableReadDbModel<TId>` and auditable write configurations apply a query filter that hides rows where `DeletedAt` is not null.
 - `EfReadRepository` sorts by projected read model fields through generated typed selectors. Unsupported fields and directions are rejected; sorting does not discover members through runtime reflection.
-- Repository registration is generated at compile time. Read-model registration, EF configuration discovery, and other remaining reflection are documented in [Reflection inventory](docs/reflection-inventory.md). This change does not establish Native AOT support for the package.
+- Repository registration is generated at compile time. This change does not establish Native AOT support for the package.
 
 ## Project Structure
 

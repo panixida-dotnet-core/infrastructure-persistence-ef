@@ -3,14 +3,14 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.DependencyInjection;
+namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Registrations;
 
 /// <summary>
 /// Connects generated assembly registrations to the persistence registration extensions.
 /// This API is intended for source-generated code.
 /// </summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
-public static class GeneratedRepositoryRegistry
+public static class RepositoryRegistr
 {
     private static readonly ConditionalWeakTable<Assembly, Registration> Registrations = new();
 
@@ -38,7 +38,6 @@ public static class GeneratedRepositoryRegistry
     {
         ArgumentNullException.ThrowIfNull(assembly);
 
-        // A host can reference a DbContext type before executing any code in its assembly.
         RuntimeHelpers.RunModuleConstructor(assembly.ManifestModule.ModuleHandle);
 
         if (Registrations.TryGetValue(assembly, out var registration))
