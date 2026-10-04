@@ -1,5 +1,6 @@
 using PANiXiDA.Core.Application.Querying.Cursor;
 using Microsoft.EntityFrameworkCore;
+using PANiXiDA.Core.Application.Querying;
 using PANiXiDA.Core.Application.Querying.Pagination;
 using PANiXiDA.Core.Application.Querying.Sorting;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.DbContexts;
@@ -64,6 +65,7 @@ internal sealed class ExposedReadRepository(WritableReadDbContext dbContext)
 
     public Task<PaginationResult<TReadModel>> GetProjectionPageAsync<TReadModel, TMapper, TSorting>(
         PaginationParameters pagination, SortingParameters sortingParameters)
+        where TReadModel : IReadModel
         where TMapper : IReadModelMapper<int, ProductReadDbModel, TReadModel>
         where TSorting : IReadModelSorting<TReadModel>
     {
@@ -71,6 +73,7 @@ internal sealed class ExposedReadRepository(WritableReadDbContext dbContext)
     }
 
     public Task<List<TReadModel>> GetProjectionListAsync<TReadModel, TMapper, TSorting>(SortingParameters sortingParameters)
+        where TReadModel : IReadModel
         where TMapper : IReadModelMapper<int, ProductReadDbModel, TReadModel>
         where TSorting : IReadModelSorting<TReadModel>
     {

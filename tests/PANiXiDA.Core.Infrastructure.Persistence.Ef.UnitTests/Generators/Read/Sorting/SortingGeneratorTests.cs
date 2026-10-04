@@ -352,7 +352,7 @@ public sealed class SortingGeneratorTests
             public interface IOther { }
             public class Other : IOther { }
             public interface IMore : IOther { }
-            public record Model;
+            public record Model : PANiXiDA.Core.Application.Querying.IReadModel;
             public class DbModel : PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Models.ReadDbModel<int> { }
             public class Mapper : IReadModelMapper<int, DbModel, Model>
             {
