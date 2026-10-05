@@ -183,6 +183,10 @@ public sealed class OrderRepository(
 
 ### Read Models
 
+Projected models used by `IReadModelMapper` and `EfReadRepository.GetByIdAsync` / `GetPagedResultAsync`
+must implement `PANiXiDA.Core.Application.Querying.IReadModel`. When upgrading to version 5,
+add the interface to existing projection types and propagate the constraint in generic wrappers.
+
 ```csharp
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Mapping;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Models;

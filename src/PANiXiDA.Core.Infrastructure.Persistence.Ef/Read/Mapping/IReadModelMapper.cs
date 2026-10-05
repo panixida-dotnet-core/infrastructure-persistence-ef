@@ -1,4 +1,5 @@
-﻿using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Models;
+﻿using PANiXiDA.Core.Application.Querying;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Models;
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Mapping;
 
@@ -7,10 +8,11 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Read.Mapping;
 /// </summary>
 /// <typeparam name="TId">The database read model identifier type.</typeparam>
 /// <typeparam name="TDbReadModel">The database read model type.</typeparam>
-/// <typeparam name="TReadModel">The projected read model type.</typeparam>
+/// <typeparam name="TReadModel">The projected application model implementing <see cref="IReadModel"/>.</typeparam>
 public interface IReadModelMapper<TId, TDbReadModel, TReadModel>
     where TId : struct
     where TDbReadModel : ReadDbModel<TId>
+    where TReadModel : IReadModel
 {
     /// <summary>
     /// Projects the specified database read model query to the application read model query.

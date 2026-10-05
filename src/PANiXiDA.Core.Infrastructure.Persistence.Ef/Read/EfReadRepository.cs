@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 
 using PANiXiDA.Core.Application.Persistence;
+using PANiXiDA.Core.Application.Querying;
 using PANiXiDA.Core.Application.Querying.Cursor;
 using PANiXiDA.Core.Application.Querying.Pagination;
 using PANiXiDA.Core.Application.Querying.Sorting;
@@ -47,7 +48,7 @@ public abstract class EfReadRepository
     /// <summary>
     /// Gets a projected read model by database read model identifier.
     /// </summary>
-    /// <typeparam name="TReadModel">The projected read model type.</typeparam>
+    /// <typeparam name="TReadModel">The projected application model implementing <see cref="IReadModel"/>.</typeparam>
     /// <typeparam name="TReadModelMapper">The mapper used to project the database read model.</typeparam>
     /// <param name="id">The database read model identifier.</param>
     /// <param name="cancellationToken">The token used to cancel the operation.</param>
@@ -55,6 +56,7 @@ public abstract class EfReadRepository
     protected virtual Task<TReadModel?> GetByIdAsync<TReadModel, TReadModelMapper>(
         TId id,
         CancellationToken cancellationToken)
+        where TReadModel : IReadModel
         where TReadModelMapper : IReadModelMapper<TId, TReadDbModel, TReadModel>
     {
         var query = Query.Where(item => item.Id.Equals(id));
@@ -65,7 +67,7 @@ public abstract class EfReadRepository
     /// <summary>
     /// Gets a projected page of read models.
     /// </summary>
-    /// <typeparam name="TReadModel">The projected read model type.</typeparam>
+    /// <typeparam name="TReadModel">The projected application model implementing <see cref="IReadModel"/>.</typeparam>
     /// <typeparam name="TReadModelMapper">The mapper used to project database read models.</typeparam>
     /// <typeparam name="TReadModelSorting">The sorting implementation and defaults for the projected model.</typeparam>
     /// <param name="query">The query to paginate.</param>
@@ -78,6 +80,7 @@ public abstract class EfReadRepository
         PaginationParameters paginationParameters,
         SortingParameters sortingParameters,
         CancellationToken cancellationToken)
+        where TReadModel : IReadModel
         where TReadModelMapper : IReadModelMapper<TId, TReadDbModel, TReadModel>
         where TReadModelSorting : IReadModelSorting<TReadModel>
     {
