@@ -71,17 +71,17 @@ public sealed class EfUnitOfWork<TDbContext>(TDbContext dbContext) : IUnitOfWork
     }
 
     /// <inheritdoc />
-    public async Task CommitTransactionAsync(CancellationToken cancellationToken)
+    public Task CommitTransactionAsync(CancellationToken cancellationToken)
     {
-        await CompleteTransactionAsync(
+        return CompleteTransactionAsync(
             static (transaction, token) => transaction.CommitAsync(token),
             cancellationToken);
     }
 
     /// <inheritdoc />
-    public async Task RollbackTransactionAsync(CancellationToken cancellationToken)
+    public Task RollbackTransactionAsync(CancellationToken cancellationToken)
     {
-        await CompleteTransactionAsync(
+        return CompleteTransactionAsync(
             static (transaction, token) => transaction.RollbackAsync(token),
             cancellationToken);
     }
