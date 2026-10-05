@@ -56,8 +56,10 @@ public sealed class ReadModelMapperTests
         var compilation = CSharpCompilation.Create("ReadModelMapperConsumer", [syntax], References,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
-        return compilation.GetDiagnostics(TestContext.Current.CancellationToken)
-            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
-            .ToArray();
+        return
+        [
+            .. compilation.GetDiagnostics(TestContext.Current.CancellationToken)
+                .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+        ];
     }
 }
