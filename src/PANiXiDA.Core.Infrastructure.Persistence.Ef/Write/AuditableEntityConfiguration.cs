@@ -54,8 +54,8 @@ public abstract class AuditableEntityConfiguration<
             return;
         }
 
-        var propertyName = FindAuditProperty(builder.Metadata, EfConstants.DeletedAt)?.Name
-            ?? EfConstants.DeletedAt;
+        var property = FindAuditProperty(builder.Metadata, EfConstants.DeletedAt);
+        var propertyName = property is null ? EfConstants.DeletedAt : property.Name;
 
         builder.HasQueryFilter(item => EF.Property<object?>(item, propertyName) == null);
     }

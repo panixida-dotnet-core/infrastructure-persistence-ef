@@ -59,11 +59,6 @@ internal sealed class AuditSaveChangesInterceptor(TimeProvider timeProvider)
 
         foreach (var entry in dbContext.ChangeTracker.Entries())
         {
-            if (entry.State is EntityState.Detached or EntityState.Unchanged)
-            {
-                continue;
-            }
-
             UpdateEntry(entry, now);
         }
     }
@@ -130,9 +125,13 @@ internal sealed class AuditSaveChangesInterceptor(TimeProvider timeProvider)
         }
 
         var isDateTime = property.ClrType == typeof(DateTime) || property.ClrType == typeof(DateTime?);
-        entry.Property(property.Name).CurrentValue = isDateTime
-            ? value
-            : property.GetTypeMapping().Converter?.ConvertFromProvider(value) ?? value;
+        object? currentValue = value;
+        if (!isDateTime && property.GetTypeMapping().Converter is { } converter)
+        {
+            currentValue = converter.ConvertFromProvider(value);
+        }
+
+        entry.Property(property.Name).CurrentValue = currentValue;
     }
 
     private static void SetNotModified(EntityEntry entry, IProperty? property)

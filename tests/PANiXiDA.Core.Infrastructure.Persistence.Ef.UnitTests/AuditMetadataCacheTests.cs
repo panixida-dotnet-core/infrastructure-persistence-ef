@@ -1,8 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Constants;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Interceptors;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Write;
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.UnitTests;
 
@@ -43,6 +45,44 @@ public sealed class AuditMetadataCacheTests
         second.CreatedAt.DeclaringType.Should().BeSameAs(secondEntityType);
     }
 
+    [Fact(DisplayName = "Audit column discovery does not assign table properties to a view-only entity")]
+    public void GetAuditProperties_DoesNotMatchColumnsWithoutTableMapping()
+    {
+        using var context = new ViewAuditCacheDbContext();
+        var entityType = context.Model.FindEntityType(typeof(AuditCacheEntity))!;
+
+        var properties = AuditSaveChangesInterceptor.GetAuditProperties(entityType);
+
+        entityType.GetTableName().Should().BeNull();
+        properties.CreatedAt.Should().BeNull();
+        properties.UpdatedAt.Should().BeNull();
+        properties.DeletedAt.Should().BeNull();
+    }
+
+    [Fact(DisplayName = "Unsupported audit CLR types without converters fail instead of being silently ignored")]
+    public void SavingChanges_RejectsUnsupportedAuditTypeWithoutConverter()
+    {
+        using var context = new UnsupportedAuditDbContext();
+        var entity = new UnsupportedAuditEntity { Id = 1 };
+        context.Add(entity);
+        var interceptor = new AuditSaveChangesInterceptor(TimeProvider.System);
+        var eventData = new DbContextEventData(null!, static (_, _) => string.Empty, context);
+
+        var act = () => interceptor.SavingChanges(eventData, default);
+
+        act.Should().Throw<InvalidCastException>();
+    }
+
+    [Fact(DisplayName = "An audit override without DeletedAt retains the query translation failure for soft delete")]
+    public void ConfigureSoftDelete_ReportsMissingPropertyDuringQueryTranslation()
+    {
+        using var context = new MissingAuditDbContext();
+
+        var act = () => context.Set<UnsupportedAuditEntity>().ToQueryString();
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*EF.Property*DeletedAt*failed*");
+    }
+
     [Theory(DisplayName = "Audit timestamps retain CLR DateTime values when database converters store ticks")]
     [InlineData(EntityState.Added)]
     [InlineData(EntityState.Modified)]
@@ -76,11 +116,13 @@ internal sealed class AuditCacheEntity
 
 internal abstract class AuditCacheDbContext : DbContext
 {
+    internal const string ConnectionString = "Host=localhost;Database=audit_cache_tests;Username=postgres";
+
     protected abstract bool UseAlternateCreation { get; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
-        optionsBuilder.UseNpgsql("Host=localhost;Database=audit_cache_tests;Username=postgres");
+        optionsBuilder.UseNpgsql(ConnectionString);
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -109,6 +151,64 @@ internal sealed class SecondAuditCacheDbContext : AuditCacheDbContext
     protected override bool UseAlternateCreation => true;
 }
 
+internal sealed class ViewAuditCacheDbContext : AuditCacheDbContext
+{
+    protected override bool UseAlternateCreation => false;
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+        modelBuilder.Entity<AuditCacheEntity>().ToView("audit_view").ToTable((string?)null);
+    }
+}
+
+internal sealed class UnsupportedAuditEntity
+{
+    public int Id { get; set; }
+
+    public string CreatedAt { get; set; } = string.Empty;
+}
+
+internal sealed class UnsupportedAuditDbContext : DbContext
+{
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        optionsBuilder.UseNpgsql(AuditCacheDbContext.ConnectionString);
+    }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<UnsupportedAuditEntity>();
+    }
+}
+
+internal sealed class MissingAuditDbContext : DbContext
+{
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        optionsBuilder.UseNpgsql(AuditCacheDbContext.ConnectionString);
+    }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.ApplyConfiguration(new MissingAuditConfiguration(true));
+    }
+}
+
+internal sealed class MissingAuditConfiguration(bool softDeleteEnabled) : AuditableEntityConfiguration<UnsupportedAuditEntity>
+{
+    protected override void ConfigureEntity(EntityTypeBuilder<UnsupportedAuditEntity> builder)
+    {
+        builder.HasKey(item => item.Id);
+    }
+
+    protected override void ConfigureAudit(EntityTypeBuilder<UnsupportedAuditEntity> builder)
+    {
+    }
+
+    protected override bool IsSoftDeleteEnabled() => softDeleteEnabled;
+}
+
 internal sealed class TicksAuditEntity
 {
     public int Id { get; set; }
@@ -124,7 +224,7 @@ internal sealed class TicksAuditDbContext : DbContext
 {
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
-        optionsBuilder.UseNpgsql("Host=localhost;Database=audit_cache_tests;Username=postgres");
+        optionsBuilder.UseNpgsql(AuditCacheDbContext.ConnectionString);
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
