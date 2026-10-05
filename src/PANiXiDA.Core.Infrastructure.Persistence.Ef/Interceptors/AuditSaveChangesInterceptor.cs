@@ -16,7 +16,7 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Interceptors;
 internal sealed class AuditSaveChangesInterceptor(TimeProvider timeProvider)
     : SaveChangesInterceptor
 {
-    private static readonly ConditionalWeakTable<IEntityType, AuditProperties> AuditPropertiesCache = new();
+    private static readonly ConditionalWeakTable<IEntityType, AuditProperties> AuditPropertiesCache = [];
 
     /// <summary>
     /// Updates audit properties before synchronous changes are saved.
