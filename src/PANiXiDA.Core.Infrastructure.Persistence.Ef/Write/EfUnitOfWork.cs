@@ -103,15 +103,10 @@ public sealed class EfUnitOfWork<TDbContext>(TDbContext dbContext) : IUnitOfWork
     }
 
     /// <inheritdoc />
-    public async ValueTask DisposeTransactionAsync()
+    public ValueTask DisposeTransactionAsync()
     {
         var transaction = TakeCurrentTransaction();
-        if (transaction == null)
-        {
-            return;
-        }
-
-        await transaction.DisposeAsync();
+        return transaction?.DisposeAsync() ?? ValueTask.CompletedTask;
     }
 
     private IDbContextTransaction? TakeCurrentTransaction()
