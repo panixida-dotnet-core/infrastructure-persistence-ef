@@ -27,7 +27,7 @@ The library is intentionally infrastructure-focused. Domain model design, comman
 - `AggregateTracker` implementation for tracking touched aggregate roots independently of EF Core.
 - `EfUnitOfWork<TDbContext>` implementation for transaction boundaries.
 - Keyed `IUnitOfWork` registration by write `DbContext` type for modular applications.
-- Auditable entity configuration with `CreatedAt`, `UpdatedAt`, and `DeletedAt` shadow properties.
+- Auditable entity configuration with `CreatedAt`, `UpdatedAt`, and `DeletedAt` shadow or mapped CLR properties, including value objects.
 - SaveChanges interceptor that updates audit values and converts deletes with `DeletedAt` into soft deletes.
 - Read repository helpers for page-based pagination, cursor pagination, dynamic sorting, and projection through `IReadModelMapper`.
 
@@ -273,8 +273,11 @@ var items = await query.ToListAsync(cancellationToken);
 
 ## Behavior Notes
 
-- Audit timestamps are stored as EF Core shadow properties for write entities configured through `AuditableEntityConfiguration<TEntity>`.
-- Added entities receive `CreatedAt` and `UpdatedAt`.
+- `AuditableEntityConfiguration<TEntity>` first reuses a property named `CreatedAt`, `UpdatedAt`, or `DeletedAt`, then looks for a property mapped to the corresponding column name. Missing properties are added as shadow properties. Map CLR properties in `ConfigureEntity`; overriding `ConfigureAudit` is not required.
+- Scalar value objects are supported through EF Core value converters with `DateTime` provider values. For example, map a `Creation` property using `.HasConversion(value => value.Value, value => new Creation(value)).HasColumnName(EfConstants.CreatedAt)`, where `Creation` wraps a `DateTime`. Apply the same mapping to update and nullable deletion value objects using `EfConstants.UpdatedAt` and `EfConstants.DeletedAt`. Owned types, complex types and value objects mapped to multiple columns are outside this convention.
+- Column-name matching uses the exact `EfConstants` names. Explicit mappings to `created_at`, `updated_at`, or `deleted_at` do not match this convention; standard audit CLR or shadow property names still work with snake-case naming.
+- Audit configuration runs when EF Core builds its cached model. The interceptor caches resolved audit properties by EF entity metadata and reuses them across contexts sharing that model; it does not scan properties on every save. Discovery uses EF metadata, and the soft-delete filter uses a statically typed `EF.Property<object?>` expression without runtime reflection or dynamic generic method construction in this package.
+- Added entities receive `CreatedAt` and `UpdatedAt` from the current UTC time, including when a creation timestamp was already assigned.
 - Modified entities receive a new `UpdatedAt`; `CreatedAt` is marked as not modified.
 - Deleted entities that have `DeletedAt` are converted to modified entities and receive `DeletedAt` and `UpdatedAt`.
 - `AuditableReadDbModel<TId>` and auditable write configurations apply a query filter that hides rows where `DeletedAt` is not null.

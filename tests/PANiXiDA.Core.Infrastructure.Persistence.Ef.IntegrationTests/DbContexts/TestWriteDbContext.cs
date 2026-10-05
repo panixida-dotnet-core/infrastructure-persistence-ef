@@ -15,4 +15,5 @@ internal sealed class TestWriteDbContext(
     public DbSet<NoSoftDeleteAggregateRoot> NoSoftDeleteAggregates => Set<NoSoftDeleteAggregateRoot>();
     public DbSet<NonAuditableEntity> NonAuditableEntities => Set<NonAuditableEntity>();
     public DbSet<UpdatedOnlyEntity> UpdatedOnlyEntities => Set<UpdatedOnlyEntity>();
+    public DbSet<ConvertedAuditEntity> ConvertedAuditEntities => Set<ConvertedAuditEntity>();
 }

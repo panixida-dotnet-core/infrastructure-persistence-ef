@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Constants;
@@ -7,7 +8,7 @@ using PANiXiDA.Core.Infrastructure.Persistence.Ef.Constants;
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Write;
 
 /// <summary>
-/// Provides base configuration for an auditable entity with audit shadow properties and soft-delete support.
+/// Provides base configuration for an auditable entity with audit properties and soft-delete support.
 /// </summary>
 /// <typeparam name="TEntity">The entity type to configure.</typeparam>
 public abstract class AuditableEntityConfiguration<
@@ -15,7 +16,7 @@ public abstract class AuditableEntityConfiguration<
     where TEntity : class
 {
     /// <summary>
-    /// Applies entity-specific configuration, audit shadow properties, and the soft-delete query filter.
+    /// Applies entity-specific configuration, audit properties, and the soft-delete query filter.
     /// </summary>
     /// <param name="builder">The entity type builder to configure.</param>
     public virtual void Configure(EntityTypeBuilder<TEntity> builder)
@@ -32,21 +33,14 @@ public abstract class AuditableEntityConfiguration<
     protected abstract void ConfigureEntity(EntityTypeBuilder<TEntity> builder);
 
     /// <summary>
-    /// Adds shadow properties used to audit the entity.
+    /// Reuses properties mapped to audit columns, adding shadow properties when no matching property exists.
     /// </summary>
     /// <param name="builder">The entity type builder to configure.</param>
     protected virtual void ConfigureAudit(EntityTypeBuilder<TEntity> builder)
     {
-        builder.Property<DateTime>(EfConstants.CreatedAt)
-            .IsRequired()
-            .HasColumnOrder(1);
-
-        builder.Property<DateTime>(EfConstants.UpdatedAt)
-            .IsRequired()
-            .HasColumnOrder(2);
-
-        builder.Property<DateTime?>(EfConstants.DeletedAt)
-            .HasColumnOrder(3);
+        ConfigureAuditProperty(builder, EfConstants.CreatedAt, true, 1);
+        ConfigureAuditProperty(builder, EfConstants.UpdatedAt, true, 2);
+        ConfigureAuditProperty(builder, EfConstants.DeletedAt, false, 3);
     }
 
     /// <summary>
@@ -60,8 +54,10 @@ public abstract class AuditableEntityConfiguration<
             return;
         }
 
-        builder.HasQueryFilter(item =>
-            EF.Property<DateTime?>(item, EfConstants.DeletedAt) == null);
+        var propertyName = FindAuditProperty(builder.Metadata, EfConstants.DeletedAt)?.Name
+            ?? EfConstants.DeletedAt;
+
+        builder.HasQueryFilter(item => EF.Property<object?>(item, propertyName) == null);
     }
 
     /// <summary>
@@ -73,5 +69,26 @@ public abstract class AuditableEntityConfiguration<
     protected virtual bool IsSoftDeleteEnabled()
     {
         return true;
+    }
+
+    private static void ConfigureAuditProperty(
+        EntityTypeBuilder<TEntity> builder,
+        string columnName,
+        bool isRequired,
+        int columnOrder)
+    {
+        var property = FindAuditProperty(builder.Metadata, columnName)
+            ?? (isRequired
+                ? builder.Property<DateTime>(columnName).Metadata
+                : builder.Property<DateTime?>(columnName).Metadata);
+
+        property.IsNullable = !isRequired;
+        property.SetColumnOrder(columnOrder);
+    }
+
+    private static IMutableProperty? FindAuditProperty(IMutableEntityType entityType, string columnName)
+    {
+        return entityType.FindProperty(columnName)
+            ?? entityType.GetProperties().FirstOrDefault(property => property.GetColumnName() == columnName);
     }
 }
