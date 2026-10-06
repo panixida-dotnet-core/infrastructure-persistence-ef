@@ -27,7 +27,7 @@ The library is intentionally infrastructure-focused. Domain model design, comman
 - `AggregateTracker` implementation for tracking touched aggregate roots independently of EF Core.
 - `EfUnitOfWork<TDbContext>` implementation for transaction boundaries.
 - Keyed `IUnitOfWork` registration by write `DbContext` type for modular applications.
-- Auditable entity configuration with `CreatedAt`, `UpdatedAt`, and `DeletedAt` shadow properties.
+- Auditable entity configuration with `CreatedAt`, `UpdatedAt`, and `DeletedAt` shadow or mapped CLR properties, including value objects.
 - SaveChanges interceptor that updates audit values and converts deletes with `DeletedAt` into soft deletes.
 - Read repository helpers for page-based pagination, cursor pagination, dynamic sorting, and projection through `IReadModelMapper`.
 
@@ -273,8 +273,9 @@ var items = await query.ToListAsync(cancellationToken);
 
 ## Behavior Notes
 
-- Audit timestamps are stored as EF Core shadow properties for write entities configured through `AuditableEntityConfiguration<TEntity>`.
-- Added entities receive `CreatedAt` and `UpdatedAt`.
+- `AuditableEntityConfiguration<TEntity>` reuses properties by CLR name or exact `CreatedAt`, `UpdatedAt`, and `DeletedAt` column names; missing properties become shadow properties. Configure mappings in `ConfigureEntity`; overriding `ConfigureAudit` is not required.
+- Scalar value objects require EF converters with `DateTime` provider values. Audit metadata is cached per EF model.
+- Added entities receive current UTC `CreatedAt` and `UpdatedAt`, overwriting supplied values.
 - Modified entities receive a new `UpdatedAt`; `CreatedAt` is marked as not modified.
 - Deleted entities that have `DeletedAt` are converted to modified entities and receive `DeletedAt` and `UpdatedAt`.
 - `AuditableReadDbModel<TId>` and auditable write configurations apply a query filter that hides rows where `DeletedAt` is not null.

@@ -1,18 +1,23 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using System.Runtime.CompilerServices;
+
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Metadata;
 
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Constants;
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Interceptors;
 
 /// <summary>
-/// Updates audit shadow properties before changes are saved by a <see cref="DbContext"/>.
+/// Updates audit properties before changes are saved by a <see cref="DbContext"/>.
 /// </summary>
 /// <param name="timeProvider">The time provider used to generate UTC audit timestamps.</param>
 internal sealed class AuditSaveChangesInterceptor(TimeProvider timeProvider)
     : SaveChangesInterceptor
 {
+    private static readonly ConditionalWeakTable<IEntityType, AuditProperties> AuditPropertiesCache = [];
+
     /// <summary>
     /// Updates audit properties before synchronous changes are saved.
     /// </summary>
@@ -60,7 +65,7 @@ internal sealed class AuditSaveChangesInterceptor(TimeProvider timeProvider)
 
     private static void UpdateEntry(EntityEntry entry, DateTime now)
     {
-        var auditProperties = GetAuditProperties(entry);
+        var auditProperties = GetAuditProperties(entry.Metadata);
 
         switch (entry.State)
         {
@@ -78,67 +83,81 @@ internal sealed class AuditSaveChangesInterceptor(TimeProvider timeProvider)
         }
     }
 
-    private static AuditProperties GetAuditProperties(EntityEntry entry)
+    internal static AuditProperties GetAuditProperties(IEntityType entityType)
     {
-        return new AuditProperties(
-            HasProperty(entry, EfConstants.CreatedAt),
-            HasProperty(entry, EfConstants.UpdatedAt),
-            HasProperty(entry, EfConstants.DeletedAt));
+        return AuditPropertiesCache.GetValue(entityType, static metadata => new AuditProperties(
+            FindAuditProperty(metadata, EfConstants.CreatedAt),
+            FindAuditProperty(metadata, EfConstants.UpdatedAt),
+            FindAuditProperty(metadata, EfConstants.DeletedAt)));
     }
 
     private static void UpdateAddedEntry(EntityEntry entry, AuditProperties auditProperties, DateTime now)
     {
-        SetCurrentValue(entry, EfConstants.CreatedAt, auditProperties.HasCreatedAt, now);
-        SetCurrentValue(entry, EfConstants.UpdatedAt, auditProperties.HasUpdatedAt, now);
+        SetCurrentValue(entry, auditProperties.CreatedAt, now);
+        SetCurrentValue(entry, auditProperties.UpdatedAt, now);
     }
 
     private static void UpdateModifiedEntry(EntityEntry entry, AuditProperties auditProperties, DateTime now)
     {
-        SetCurrentValue(entry, EfConstants.UpdatedAt, auditProperties.HasUpdatedAt, now);
-        SetNotModified(entry, EfConstants.CreatedAt, auditProperties.HasCreatedAt);
+        SetCurrentValue(entry, auditProperties.UpdatedAt, now);
+        SetNotModified(entry, auditProperties.CreatedAt);
     }
 
     private static void UpdateDeletedEntry(EntityEntry entry, AuditProperties auditProperties, DateTime now)
     {
-        if (!auditProperties.HasDeletedAt)
+        if (auditProperties.DeletedAt is null)
         {
             return;
         }
 
         entry.State = EntityState.Modified;
 
-        SetCurrentValue(entry, EfConstants.DeletedAt, auditProperties.HasDeletedAt, now);
-        SetCurrentValue(entry, EfConstants.UpdatedAt, auditProperties.HasUpdatedAt, now);
-        SetNotModified(entry, EfConstants.CreatedAt, auditProperties.HasCreatedAt);
+        SetCurrentValue(entry, auditProperties.DeletedAt, now);
+        SetCurrentValue(entry, auditProperties.UpdatedAt, now);
+        SetNotModified(entry, auditProperties.CreatedAt);
     }
 
-    private static void SetCurrentValue(EntityEntry entry, string propertyName, bool hasProperty, DateTime value)
+    private static void SetCurrentValue(EntityEntry entry, IProperty? property, DateTime value)
     {
-        if (!hasProperty)
+        if (property is null)
         {
             return;
         }
 
-        entry.Property(propertyName).CurrentValue = value;
-    }
-
-    private static void SetNotModified(EntityEntry entry, string propertyName, bool hasProperty)
-    {
-        if (!hasProperty)
+        var isDateTime = property.ClrType == typeof(DateTime) || property.ClrType == typeof(DateTime?);
+        object? currentValue = value;
+        if (!isDateTime && property.GetTypeMapping().Converter is { } converter)
         {
-            return;
+            currentValue = converter.ConvertFromProvider(value);
         }
 
-        entry.Property(propertyName).IsModified = false;
+        entry.Property(property.Name).CurrentValue = currentValue;
     }
 
-    private static bool HasProperty(EntityEntry entry, string propertyName)
+    private static void SetNotModified(EntityEntry entry, IProperty? property)
     {
-        return entry.Metadata.FindProperty(propertyName) != null;
+        if (property is not null)
+        {
+            entry.Property(property.Name).IsModified = false;
+        }
     }
 
-    private readonly record struct AuditProperties(
-        bool HasCreatedAt,
-        bool HasUpdatedAt,
-        bool HasDeletedAt);
+    private static IProperty? FindAuditProperty(IEntityType entityType, string columnName)
+    {
+        if (entityType.FindProperty(columnName) is { } property)
+        {
+            return property;
+        }
+
+        var tables = entityType.GetTableMappings()
+            .Select(mapping => StoreObjectIdentifier.Table(mapping.Table.Name, mapping.Table.Schema));
+
+        return entityType.GetProperties().FirstOrDefault(item =>
+            tables.Any(table => item.GetColumnName(table) == columnName));
+    }
+
+    internal sealed record AuditProperties(
+        IProperty? CreatedAt,
+        IProperty? UpdatedAt,
+        IProperty? DeletedAt);
 }
