@@ -149,11 +149,11 @@ internal sealed class AuditSaveChangesInterceptor(TimeProvider timeProvider)
             return property;
         }
 
-        var table = StoreObjectIdentifier.Create(entityType, StoreObjectType.Table);
+        var tables = entityType.GetTableMappings()
+            .Select(mapping => StoreObjectIdentifier.Table(mapping.Table.Name, mapping.Table.Schema));
 
-        return table.HasValue
-            ? entityType.GetProperties().FirstOrDefault(item => item.GetColumnName(table.Value) == columnName)
-            : null;
+        return entityType.GetProperties().FirstOrDefault(item =>
+            tables.Any(table => item.GetColumnName(table) == columnName));
     }
 
     internal sealed record AuditProperties(
