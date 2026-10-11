@@ -181,6 +181,8 @@ public sealed class OrderRepository(
 
 `EfRepository` persists aggregate roots through `AddAsync`, `UpdateAsync`, and `DeleteAsync`, and tracks touched aggregate roots through `IAggregateTracker`. The built-in write registration adds the generic `AggregateTracker` implementation as scoped, but consumers can register their own tracker before calling the EF registration methods. When a unit-of-work transaction is active, repository saves participate in that transaction and `EfUnitOfWork` commits or rolls it back.
 
+`EfUnitOfWork` preserves failures from the action, `SaveChangesAsync`, commit, rollback and transaction disposal. Disposal is attempted even if rollback or commit fails. A single failure is rethrown with its original exception instance and stack trace; multiple failures produce an `AggregateException` in execution order. Existing aggregates are preserved; use `Flatten()` to inspect nested failures. A single cancellation remains cancellation; cancellation combined with another failure is reported as an aggregate failure.
+
 ### Read Models
 
 Projected models used by `IReadModelMapper` and `EfReadRepository.GetByIdAsync` / `GetPagedResultAsync`
