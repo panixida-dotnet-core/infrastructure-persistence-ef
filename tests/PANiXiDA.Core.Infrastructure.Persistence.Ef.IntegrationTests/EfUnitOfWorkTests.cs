@@ -278,15 +278,8 @@ public sealed class EfUnitOfWorkTests(PostgreSqlContainerFixture fixture)
             "save" => nameof(SaveFailureInterceptor.SavingChangesAsync),
             _ => nameof(TransactionFailureInterceptor.TransactionCommittingAsync)
         });
-        if (rollbackException is not null)
-        {
-            rollbackException.StackTrace.Should().Contain(nameof(TransactionFailureInterceptor.TransactionRollingBackAsync));
-        }
-
-        if (disposeException is not null)
-        {
-            disposeException.StackTrace.Should().Contain(nameof(ExecuteInTransactionAsync_PreservesAllFailures));
-        }
+        rollbackException?.StackTrace.Should().Contain(nameof(TransactionFailureInterceptor.TransactionRollingBackAsync));
+        disposeException?.StackTrace.Should().Contain(nameof(ExecuteInTransactionAsync_PreservesAllFailures));
 
         await unitOfWork.DisposeTransactionAsync();
         disposeCalls.Should().Be(1);
@@ -331,7 +324,7 @@ public sealed class EfUnitOfWorkTests(PostgreSqlContainerFixture fixture)
             : unitOfWork.RollbackTransactionAsync(TestContext.Current.CancellationToken));
 
         // Assert
-        AssertFailures(actualException, new[] { completionException, disposeException }.OfType<Exception>().ToArray());
+        AssertFailures(actualException, [.. new[] { completionException, disposeException }.OfType<Exception>()]);
         disposeCalls.Should().Be(1);
         await unitOfWork.DisposeTransactionAsync();
         disposeCalls.Should().Be(1);
