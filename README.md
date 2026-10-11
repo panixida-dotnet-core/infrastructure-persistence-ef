@@ -36,7 +36,6 @@ The library is intentionally infrastructure-focused. Domain model design, comman
 ### Requirements
 
 - .NET 10 SDK
-- `PANiXiDA.Core.Application` 5.0.2 or later and `PANiXiDA.Core.Domain` 3.0.1 or later
 - PostgreSQL when using the built-in DI registration methods
 - Docker for local integration tests because they use Testcontainers with PostgreSQL
 
