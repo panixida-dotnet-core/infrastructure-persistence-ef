@@ -239,7 +239,6 @@ public sealed class EfUnitOfWorkTests(PostgreSqlContainerFixture fixture)
         bool failRollback,
         bool failDispose)
     {
-        // Arrange
         var originalException = new InvalidOperationException("Operation failed.");
         var rollbackException = failRollback ? new InvalidOperationException("Rollback failed.") : null;
         var disposeException = failDispose ? new InvalidOperationException("Dispose failed.") : null;
@@ -263,12 +262,10 @@ public sealed class EfUnitOfWorkTests(PostgreSqlContainerFixture fixture)
         var expectedExceptions = new[] { originalException, rollbackException, disposeException }
             .OfType<Exception>().ToArray();
 
-        // Act
         var actualException = await Record.ExceptionAsync(() => unitOfWork.ExecuteInTransactionAsync(
             _ => failureStage == "action" ? ThrowOperationAsync(originalException) : Task.CompletedTask,
             TestContext.Current.CancellationToken));
 
-        // Assert
         AssertFailures(actualException, expectedExceptions);
         interceptor.RollbackCalls.Should().Be(1);
         disposeCalls.Should().Be(1);
@@ -297,7 +294,6 @@ public sealed class EfUnitOfWorkTests(PostgreSqlContainerFixture fixture)
         bool failCompletion,
         bool failDispose)
     {
-        // Arrange
         var completionException = failCompletion ? new InvalidOperationException("Completion failed.") : null;
         var disposeException = failDispose ? new InvalidOperationException("Dispose failed.") : null;
         var interceptor = new TransactionFailureInterceptor(
@@ -318,12 +314,10 @@ public sealed class EfUnitOfWorkTests(PostgreSqlContainerFixture fixture)
         var unitOfWork = new EfUnitOfWork<TransactionalDbContext>(context);
         await unitOfWork.BeginTransactionAsync(TestContext.Current.CancellationToken);
 
-        // Act
         var actualException = await Record.ExceptionAsync(() => commit
             ? unitOfWork.CommitTransactionAsync(TestContext.Current.CancellationToken)
             : unitOfWork.RollbackTransactionAsync(TestContext.Current.CancellationToken));
 
-        // Assert
         AssertFailures(actualException, [.. new[] { completionException, disposeException }.OfType<Exception>()]);
         disposeCalls.Should().Be(1);
         await unitOfWork.DisposeTransactionAsync();
@@ -333,7 +327,6 @@ public sealed class EfUnitOfWorkTests(PostgreSqlContainerFixture fixture)
     [Fact(DisplayName = "ExecuteInTransactionAsync preserves disposal failure after a successful commit")]
     public async Task ExecuteInTransactionAsync_WhenOnlyDisposalFails_PreservesFailure()
     {
-        // Arrange
         var exception = new InvalidOperationException("Dispose failed.");
         var interceptor = new TransactionFailureInterceptor(null, null);
         var options = await CreateInitializedOptionsAsync(interceptor);
@@ -343,11 +336,9 @@ public sealed class EfUnitOfWorkTests(PostgreSqlContainerFixture fixture)
         await using var context = new TransactionalDbContext(options);
         var unitOfWork = new EfUnitOfWork<TransactionalDbContext>(context);
 
-        // Act
         var actualException = await Record.ExceptionAsync(() => unitOfWork.ExecuteInTransactionAsync(
             _ => Task.CompletedTask, TestContext.Current.CancellationToken));
 
-        // Assert
         actualException.Should().BeSameAs(exception);
         interceptor.RollbackCalls.Should().Be(0);
         await unitOfWork.DisposeTransactionAsync();
@@ -356,7 +347,6 @@ public sealed class EfUnitOfWorkTests(PostgreSqlContainerFixture fixture)
     [Fact(DisplayName = "ExecuteInTransactionAsync preserves a single cancellation and its original stack")]
     public async Task ExecuteInTransactionAsync_WhenOnlyOperationIsCanceled_PreservesCancellation()
     {
-        // Arrange
         using var cancellation = new CancellationTokenSource();
         await cancellation.CancelAsync();
         var exception = new OperationCanceledException(cancellation.Token);
@@ -364,12 +354,10 @@ public sealed class EfUnitOfWorkTests(PostgreSqlContainerFixture fixture)
         await using var context = new TransactionalDbContext(options);
         var unitOfWork = new EfUnitOfWork<TransactionalDbContext>(context);
 
-        // Act
         var task = unitOfWork.ExecuteInTransactionAsync(
             _ => ThrowOperationAsync(exception), TestContext.Current.CancellationToken);
         var actualException = await Record.ExceptionAsync(() => task);
 
-        // Assert
         actualException.Should().BeSameAs(exception);
         exception.StackTrace.Should().Contain(nameof(ThrowOperationAsync));
         task.IsCanceled.Should().BeTrue();
@@ -379,7 +367,6 @@ public sealed class EfUnitOfWorkTests(PostgreSqlContainerFixture fixture)
     [Fact(DisplayName = "DisposeTransactionAsync preserves a single disposal failure and releases ownership")]
     public async Task DisposeTransactionAsync_WhenDisposalFails_PreservesFailure()
     {
-        // Arrange
         var exception = new InvalidOperationException("Dispose failed.");
         var options = await CreateInitializedOptionsAsync();
         var disposeCalls = 0;
@@ -394,10 +381,8 @@ public sealed class EfUnitOfWorkTests(PostgreSqlContainerFixture fixture)
         var unitOfWork = new EfUnitOfWork<TransactionalDbContext>(context);
         await unitOfWork.BeginTransactionAsync(TestContext.Current.CancellationToken);
 
-        // Act
         var actualException = await Record.ExceptionAsync(async () => await unitOfWork.DisposeTransactionAsync());
 
-        // Assert
         actualException.Should().BeSameAs(exception);
         exception.StackTrace.Should().Contain(nameof(DisposeTransactionAsync_WhenDisposalFails_PreservesFailure));
         await unitOfWork.DisposeTransactionAsync();
@@ -407,17 +392,14 @@ public sealed class EfUnitOfWorkTests(PostgreSqlContainerFixture fixture)
     [Fact(DisplayName = "ExecuteInTransactionAsync preserves an existing aggregate when cleanup succeeds")]
     public async Task ExecuteInTransactionAsync_WhenOnlyActionThrowsAggregate_PreservesInstance()
     {
-        // Arrange
         var exception = new AggregateException(new InvalidOperationException("First failure."), new ArgumentException("Second failure."));
         var options = await CreateInitializedOptionsAsync();
         await using var context = new TransactionalDbContext(options);
         var unitOfWork = new EfUnitOfWork<TransactionalDbContext>(context);
 
-        // Act
         var actualException = await Record.ExceptionAsync(() => unitOfWork.ExecuteInTransactionAsync(
             _ => ThrowOperationAsync(exception), TestContext.Current.CancellationToken));
 
-        // Assert
         actualException.Should().BeSameAs(exception);
         exception.StackTrace.Should().Contain(nameof(ThrowOperationAsync));
         unitOfWork.HasActiveTransaction.Should().BeFalse();
