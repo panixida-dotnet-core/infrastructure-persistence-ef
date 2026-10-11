@@ -10,6 +10,10 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Write;
 /// <summary>
 /// Coordinates EF Core transaction boundaries for a write DbContext.
 /// </summary>
+/// <remarks>
+/// A single failure is rethrown with its original instance and stack trace. Multiple failures from
+/// transaction execution, completion, rollback or disposal are reported in an <see cref="AggregateException" />.
+/// </remarks>
 /// <typeparam name="TDbContext">The EF Core DbContext type used by the unit of work.</typeparam>
 /// <param name="dbContext">The DbContext used to manage transactions.</param>
 public sealed class EfUnitOfWork<TDbContext>(TDbContext dbContext) : IUnitOfWork
@@ -35,9 +39,9 @@ public sealed class EfUnitOfWork<TDbContext>(TDbContext dbContext) : IUnitOfWork
             return;
         }
 
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         currentTransaction = transaction;
-        Exception? exception = null;
+        List<Exception>? exceptions = null;
 
         try
         {
@@ -47,16 +51,24 @@ public sealed class EfUnitOfWork<TDbContext>(TDbContext dbContext) : IUnitOfWork
         }
         catch (Exception caughtException)
         {
-            exception = caughtException;
+            exceptions = [caughtException];
         }
 
         TakeCurrentTransaction();
 
-        if (exception is not null)
+        if (exceptions is not null)
         {
-            await transaction.RollbackAsync(cancellationToken);
-            ExceptionDispatchInfo.Throw(exception);
+            try
+            {
+                await transaction.RollbackAsync(cancellationToken);
+            }
+            catch (Exception rollbackException)
+            {
+                exceptions.Add(rollbackException);
+            }
         }
+
+        await DisposeTransactionAsync(transaction, exceptions);
     }
 
     /// <inheritdoc />
@@ -96,10 +108,41 @@ public sealed class EfUnitOfWork<TDbContext>(TDbContext dbContext) : IUnitOfWork
             return;
         }
 
-        await using (transaction)
+        List<Exception>? exceptions = null;
+        try
         {
             await completeTransactionAsync(transaction, cancellationToken);
         }
+        catch (Exception exception)
+        {
+            exceptions = [exception];
+        }
+
+        await DisposeTransactionAsync(transaction, exceptions);
+    }
+
+    private static async Task DisposeTransactionAsync(IDbContextTransaction transaction, List<Exception>? exceptions)
+    {
+        try
+        {
+            await transaction.DisposeAsync();
+        }
+        catch (Exception disposeException)
+        {
+            (exceptions ??= []).Add(disposeException);
+        }
+
+        if (exceptions is null)
+        {
+            return;
+        }
+
+        if (exceptions.Count == 1)
+        {
+            ExceptionDispatchInfo.Throw(exceptions[0]);
+        }
+
+        throw new AggregateException("Multiple errors occurred while completing the transaction.", exceptions);
     }
 
     /// <inheritdoc />
