@@ -23,9 +23,13 @@ public sealed class AggregateTracker : IAggregateTracker, IDisposable
     {
         ArgumentNullException.ThrowIfNull(dbContexts);
         this.dbContexts = [.. dbContexts.Distinct<DbContext>(ReferenceEqualityComparer.Instance)];
+        if (this.dbContexts.Any(dbContext => dbContext is null))
+        {
+            throw new ArgumentException("Write DbContexts cannot contain null entries.", nameof(dbContexts));
+        }
+
         foreach (var dbContext in this.dbContexts)
         {
-            ArgumentNullException.ThrowIfNull(dbContext, nameof(dbContexts));
             dbContext.ChangeTracker.StateChanged += OnStateChanged;
         }
     }

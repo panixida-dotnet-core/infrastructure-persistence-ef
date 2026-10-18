@@ -32,7 +32,7 @@ public sealed class XminConcurrencyTests(PostgreSqlContainerFixture fixture)
         version.Should().NotBe(0);
         explicitEntity.Version.Should().NotBe(version);
         context.Model.FindEntityType(typeof(ExplicitVersionEntity))!.FindProperty("xmin").Should().BeNull();
-        context.Model.FindEntityType(typeof(DerivedEntity))!.GetProperty("xmin").DeclaringType.ClrType.Should().Be(typeof(BaseEntity));
+        context.Model.FindEntityType(typeof(DerivedEntity))!.GetProperty("xmin").DeclaringType.ClrType.Should().Be<BaseEntity>();
         context.Model.FindEntityType(typeof(JsonDetails))!.FindProperty("xmin").Should().BeNull();
         context.Model.FindEntityType(typeof(KeylessDomainEntity))!.FindProperty("xmin").Should().BeNull();
         context.Model.FindEntityType(typeof(DomainView))!.FindProperty("xmin").Should().BeNull();
@@ -51,7 +51,7 @@ public sealed class XminConcurrencyTests(PostgreSqlContainerFixture fixture)
         foreach (var property in new[] { aggregateToken, entityToken })
         {
             property.Should().NotBeNull();
-            property!.ClrType.Should().Be(typeof(uint));
+            property!.ClrType.Should().Be<uint>();
             property.IsConcurrencyToken.Should().BeTrue();
             property.IsShadowProperty().Should().BeTrue();
             property.ValueGenerated.Should().Be(ValueGenerated.OnAddOrUpdate);

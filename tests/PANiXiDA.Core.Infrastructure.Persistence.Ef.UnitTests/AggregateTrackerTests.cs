@@ -119,7 +119,7 @@ public sealed class AggregateTrackerTests
         var nullAggregate = () => tracker.Track(null!);
 
         nullContexts.Should().Throw<ArgumentNullException>().WithParameterName("dbContexts");
-        nullContext.Should().Throw<ArgumentNullException>().WithParameterName("dbContexts");
+        nullContext.Should().Throw<ArgumentException>().WithParameterName("dbContexts");
         nullAggregate.Should().Throw<ArgumentNullException>().WithParameterName("aggregateRoot");
     }
 
