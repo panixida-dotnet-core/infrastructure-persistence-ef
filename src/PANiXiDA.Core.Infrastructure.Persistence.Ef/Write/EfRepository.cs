@@ -1,7 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using Microsoft.EntityFrameworkCore;
 
-using PANiXiDA.Core.Application.Persistence;
 using PANiXiDA.Core.Domain.Abstractions;
 using PANiXiDA.Core.Domain.AggregateRoots;
 using PANiXiDA.Core.Domain.Identifiers;
@@ -17,11 +16,9 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Write;
 /// <typeparam name="TId">The aggregate root identifier type.</typeparam>
 /// <typeparam name="TAggregateRoot">The aggregate root type.</typeparam>
 /// <param name="dbContext">The DbContext used by the repository.</param>
-/// <param name="aggregateTracker">The tracker used to collect touched aggregate roots.</param>
 public abstract class EfRepository<TDbContext, TId,
     [DynamicallyAccessedMembers(TrimmingConstants.EntityMembers)] TAggregateRoot>(
-    TDbContext dbContext,
-    IAggregateTracker aggregateTracker) : IRepository<TId, TAggregateRoot>
+    TDbContext dbContext) : IRepository<TId, TAggregateRoot>
     where TDbContext : WriteDbContext<TDbContext>
     where TId : struct, IStronglyTypedId
     where TAggregateRoot : AggregateRoot<TId>
@@ -51,7 +48,6 @@ public abstract class EfRepository<TDbContext, TId,
         CancellationToken cancellationToken)
     {
         DbSet.Add(aggregateRoot);
-        aggregateTracker.Track(aggregateRoot);
         return dbContext.SaveChangesAsync(cancellationToken);
     }
 
@@ -61,7 +57,6 @@ public abstract class EfRepository<TDbContext, TId,
         CancellationToken cancellationToken)
     {
         DbSet.Update(aggregateRoot);
-        aggregateTracker.Track(aggregateRoot);
         return dbContext.SaveChangesAsync(cancellationToken);
     }
 
@@ -71,7 +66,6 @@ public abstract class EfRepository<TDbContext, TId,
         CancellationToken cancellationToken)
     {
         DbSet.Remove(aggregateRoot);
-        aggregateTracker.Track(aggregateRoot);
         return dbContext.SaveChangesAsync(cancellationToken);
     }
 }

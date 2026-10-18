@@ -23,7 +23,7 @@ The library is intentionally infrastructure-focused. Domain model design, comman
 - PostgreSQL registration extensions for write/read EF Core infrastructure and automatic scoped repository registration.
 - `WriteDbContext<TDbContext>` with HiLo configuration, optional context-derived schema naming, assembly configuration scanning, and plural table names.
 - `ReadDbContext<TDbContext>` with no-tracking queries, automatic read model registration, optional context-derived schema naming, and migration exclusion for read models.
-- Base `EfRepository<TDbContext, TId, TAggregateRoot>` with async persistence operations integrated with `IAggregateTracker`.
+- Base `EfRepository<TDbContext, TId, TAggregateRoot>` with async persistence operations using EF's change tracker.
 - `AggregateTracker` implementation that collects aggregate roots from the registered write DbContexts' change trackers.
 - Automatic PostgreSQL `xmin` optimistic concurrency tokens for mapped domain entities and aggregate roots.
 - `EfUnitOfWork<TDbContext>` implementation for transaction boundaries.
@@ -142,7 +142,6 @@ Persistence infrastructure does not register a non-keyed `IUnitOfWork`. A host-l
 ```csharp
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-using PANiXiDA.Core.Application.Persistence;
 using PANiXiDA.Core.Domain.Abstractions;
 using PANiXiDA.Core.Domain.AggregateRoots;
 using PANiXiDA.Core.Domain.Identifiers;
@@ -170,19 +169,21 @@ public interface IOrderRepository : IRepository<OrderId, Order>
 {
 }
 
-public sealed class OrderRepository(
-    AppWriteDbContext dbContext,
-    IAggregateTracker aggregateTracker)
-    : EfRepository<AppWriteDbContext, OrderId, Order>(dbContext, aggregateTracker), IOrderRepository
+public sealed class OrderRepository(AppWriteDbContext dbContext)
+    : EfRepository<AppWriteDbContext, OrderId, Order>(dbContext), IOrderRepository
 {
 }
 ```
 
 `WriteDbContext` applies concrete `IEntityTypeConfiguration<TEntity>` implementations from its assembly through the bundled source generator. Keep configuration and entity types `internal` or `public`, and give configurations a parameterless constructor; non-public constructors are supported. Abstract types, open generic types and configurations without a parameterless constructor are skipped. No attributes, partial classes or additional registration calls are needed. Overrides of `ConfigureEntity`, `ConfigureAudit`, `ConfigureSoftDelete` and `IsSoftDeleteEnabled` work as usual.
 
-`EfRepository` loads aggregate roots with EF tracking, including when the context defaults to no-tracking queries. Load, modify, and save an aggregate within the same scoped write DbContext. `AddAsync`, `UpdateAsync`, and `DeleteAsync` still save immediately and notify `IAggregateTracker`; `UpdateAsync` retains EF's whole-graph `Update` behavior. When a unit-of-work transaction is active, repository saves participate in that transaction and `EfUnitOfWork` commits or rolls it back. Read repositories remain no-tracking.
+`EfRepository` loads aggregate roots with EF tracking, including when the context defaults to no-tracking queries. Load, modify, and save an aggregate within the same scoped write DbContext. `AddAsync`, `UpdateAsync`, and `DeleteAsync` still save immediately; the repository depends only on its DbContext and never calls `IAggregateTracker.Track`. `UpdateAsync` retains EF's whole-graph `Update` behavior. When a unit-of-work transaction is active, repository saves participate in that transaction and `EfUnitOfWork` commits or rolls it back. Read repositories remain no-tracking.
 
-The scoped `AggregateTracker` collects aggregate roots directly from all registered write DbContexts, including aggregates loaded or attached without calling `Track`. `Track` resolves EF runtime types, including proxies, and attaches a detached aggregate when exactly one supplied context maps its type; when several contexts map it, attach it to the intended context first. `Clear` starts a new event collection scope without detaching entities or losing original concurrency values; call `Track` to include a previously cleared aggregate again. Cleared aggregates are held weakly, so detaching them or calling EF's `ChangeTracker.Clear` allows their graphs to be collected. Physically deleted aggregates are retained after EF detaches them so their domain events remain available until `Clear`, including when the tracker is first resolved after a direct write-context save. Consumers can still register their own `IAggregateTracker` before registering EF infrastructure.
+The scoped `AggregateTracker` collects aggregate roots directly from all registered write DbContexts, including aggregates loaded or attached without calling `Track`. `Track` remains available through the application contract: it resolves EF runtime types, including proxies, and attaches a detached aggregate when exactly one supplied context maps its type; when several contexts map it, attach it to the intended context first.
+
+`Clear` starts a new event collection scope without detaching entities, changing EF states, losing original concurrency values, or clearing domain events itself. It remembers the current event IDs for each root through weak keys. A cleared root becomes visible again when it raises a new event, even if EF still considers it unchanged; no explicit `Track` call is required. `PublishDomainEventsBehavior` clears the root's published events before calling `Clear`, so subsequent commands can publish new events from the same tracked instance. Explicit `Track` can also include a cleared root again.
+
+Each `WriteDbContext` retains its own successfully deleted aggregate roots after EF detaches them, until the tracker's `Clear` or `Dispose`. Their events remain available even when the tracker is first resolved after saving. There is no static deleted-aggregate store or subscription to EF tracking events. Consumers can still register their own `IAggregateTracker` before registering EF infrastructure, but EF repositories do not notify custom implementations explicitly.
 
 #### Optimistic concurrency and upgrading to version 6
 
@@ -195,6 +196,8 @@ Inheriting from `Entity<TId>` or `AggregateRoot<TId>` does not by itself create 
 PostgreSQL already supplies the `xmin` system column. Do not add an ordinary `xmin` column in migrations. Regenerate and review the consuming application's migration/model snapshot after upgrading; the mapping changes, but adding this token alone does not require a physical column. EF compares the original `xmin` on updates and deletions and refreshes it after successful saves. A concurrent modification causes the Application `ConcurrencyException` described below.
 
 Version 6 changes write queries from detached to tracked entities and replaces the parameterless `AggregateTracker` constructor with `AggregateTracker(IEnumerable<DbContext>)`. Built-in DI registration supplies the scoped write context instances. For manual construction, use `new AggregateTracker([writeContext])` and dispose the tracker before its contexts. Detached updates need the original concurrency token: a shadow value is lost after `AsNoTracking` or `ChangeTracker.Clear`. Prefer loading through the write repository; explicitly restore the original token before saving when using a disconnected workflow. Do not reload a fresh token merely to bypass a conflict.
+
+The `EfRepository` constructor now accepts only its write DbContext. Remove the `IAggregateTracker` constructor parameter and base-constructor argument from derived EF repositories. The application tracking interface remains unchanged for other persistence adapters.
 
 Explicit `ArgumentNullException.ThrowIfNull` guards have been removed from the tracker, generated-registration registries, and generated sorting methods. Their non-nullable contracts remain unchanged; passing `null` is unsupported and no longer guarantees a particular exception or parameter name.
 

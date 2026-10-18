@@ -7,7 +7,6 @@ using PANiXiDA.Core.Domain.Entities;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.DbContexts;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.Entities;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.Infrastructure;
-using PANiXiDA.Core.Infrastructure.Persistence.Ef.Tracking;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Write;
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests;
@@ -106,7 +105,7 @@ public sealed class XminConcurrencyTests(PostgreSqlContainerFixture fixture)
     public async Task UpdateAsync_RefreshesShadowXmin()
     {
         await using var context = await CreateContextAsync();
-        var repository = new XminRepository(context, new AggregateTracker([context]));
+        var repository = new XminRepository(context);
         var entity = new TestAggregateRoot(TestAggregateRootId.New()) { Name = "Original" };
         await repository.AddAsync(entity, TestContext.Current.CancellationToken);
         context.ChangeTracker.Clear();
@@ -133,7 +132,7 @@ public sealed class XminConcurrencyTests(PostgreSqlContainerFixture fixture)
         stale.Add(entity);
         await stale.SaveChangesAsync(TestContext.Current.CancellationToken);
         stale.ChangeTracker.Clear();
-        var repository = new XminRepository(stale, new AggregateTracker([stale]));
+        var repository = new XminRepository(stale);
         var loaded = (await repository.GetByIdAsync(entity.Id, TestContext.Current.CancellationToken))!;
         await using var current = fixture.CreateDbContext<XminWriteDbContext>(database, options => new(options));
         var changed = await current.Set<TestAggregateRoot>().SingleAsync(TestContext.Current.CancellationToken);
@@ -174,8 +173,8 @@ public sealed class XminConcurrencyTests(PostgreSqlContainerFixture fixture)
         return fixture.CreateInitializedDbContextAsync<XminWriteDbContext>(options => new(options));
     }
 
-    private sealed class XminRepository(XminWriteDbContext context, AggregateTracker tracker)
-        : EfRepository<XminWriteDbContext, TestAggregateRootId, TestAggregateRoot>(context, tracker);
+    private sealed class XminRepository(XminWriteDbContext context)
+        : EfRepository<XminWriteDbContext, TestAggregateRootId, TestAggregateRoot>(context);
 
     private sealed class XminWriteDbContext(DbContextOptions<XminWriteDbContext> options)
         : WriteDbContext<XminWriteDbContext>(options, [])

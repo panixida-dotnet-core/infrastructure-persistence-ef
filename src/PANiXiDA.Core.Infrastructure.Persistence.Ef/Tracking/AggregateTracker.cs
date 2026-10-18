@@ -1,7 +1,6 @@
 using System.Runtime.CompilerServices;
 
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 using PANiXiDA.Core.Application.Persistence;
 using PANiXiDA.Core.Domain.AggregateRoots;
@@ -13,9 +12,8 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Tracking;
 /// </summary>
 public sealed class AggregateTracker : IAggregateTracker, IDisposable
 {
-    private static readonly EventHandler<EntityStateChangedEventArgs> StateChangedHandler = new(OnStateChanged);
     private readonly DbContext[] dbContexts;
-    private readonly ConditionalWeakTable<IAggregateRoot, object> ignoredAggregateRoots = [];
+    private readonly ConditionalWeakTable<IAggregateRoot, HashSet<Guid>> clearedEventIds = [];
 
     /// <summary>
     /// Initializes a tracker for the specified write DbContexts without taking ownership of them.
@@ -28,11 +26,6 @@ public sealed class AggregateTracker : IAggregateTracker, IDisposable
         {
             throw new ArgumentException("Write DbContexts cannot contain null entries.", nameof(dbContexts));
         }
-
-        foreach (var dbContext in this.dbContexts)
-        {
-            dbContext.ChangeTracker.StateChanged += StateChangedHandler;
-        }
     }
 
     /// <inheritdoc />
@@ -42,7 +35,7 @@ public sealed class AggregateTracker : IAggregateTracker, IDisposable
             .Where(context => context.Model.FindRuntimeEntityType(aggregateRoot.GetType()) is not null)
             .ToArray();
         if (!matchingContexts.Any(context => context.Entry(aggregateRoot).State != EntityState.Detached)
-            && !dbContexts.Any(context => DeletedAggregateStore.Get(context).Contains(aggregateRoot)))
+            && !GetDeletedAggregates().Contains(aggregateRoot, ReferenceEqualityComparer.Instance))
         {
             if (matchingContexts.Length != 1)
             {
@@ -52,7 +45,7 @@ public sealed class AggregateTracker : IAggregateTracker, IDisposable
             matchingContexts[0].Attach(aggregateRoot);
         }
 
-        ignoredAggregateRoots.Remove(aggregateRoot);
+        clearedEventIds.Remove(aggregateRoot);
     }
 
     /// <inheritdoc />
@@ -62,9 +55,10 @@ public sealed class AggregateTracker : IAggregateTracker, IDisposable
             .SelectMany(context => context.ChangeTracker.Entries())
             .Select(entry => entry.Entity)
             .OfType<IAggregateRoot>()
-            .Concat(dbContexts.SelectMany(DeletedAggregateStore.Get))
+            .Concat(GetDeletedAggregates())
             .Distinct<IAggregateRoot>(ReferenceEqualityComparer.Instance)
-            .Where(aggregateRoot => !ignoredAggregateRoots.TryGetValue(aggregateRoot, out _))];
+            .Where(aggregateRoot => !clearedEventIds.TryGetValue(aggregateRoot, out var eventIds)
+                || aggregateRoot.GetDomainEvents().Any(domainEvent => !eventIds.Contains(domainEvent.Id)))];
     }
 
     /// <inheritdoc />
@@ -72,40 +66,32 @@ public sealed class AggregateTracker : IAggregateTracker, IDisposable
     {
         foreach (var aggregateRoot in GetAll())
         {
-            ignoredAggregateRoots.GetValue(aggregateRoot, _ => new object());
+            clearedEventIds.Remove(aggregateRoot);
+            clearedEventIds.Add(aggregateRoot, [.. aggregateRoot.GetDomainEvents().Select(domainEvent => domainEvent.Id)]);
         }
 
         ClearDeletedAggregates();
     }
 
     /// <summary>
-    /// Unsubscribes from EF tracking events without disposing the DbContexts.
+    /// Releases the event collection state without disposing the DbContexts.
     /// </summary>
     public void Dispose()
     {
-        foreach (var dbContext in dbContexts)
-        {
-            dbContext.ChangeTracker.StateChanged -= StateChangedHandler;
-        }
-        ignoredAggregateRoots.Clear();
+        clearedEventIds.Clear();
         ClearDeletedAggregates();
     }
 
     private void ClearDeletedAggregates()
     {
-        foreach (var dbContext in dbContexts)
+        foreach (var dbContext in dbContexts.OfType<IAggregateTrackingContext>())
         {
-            DeletedAggregateStore.Get(dbContext).Clear();
+            dbContext.ClearDeletedAggregates();
         }
     }
 
-    private static void OnStateChanged(object? sender, EntityStateChangedEventArgs args)
+    private IEnumerable<IAggregateRoot> GetDeletedAggregates()
     {
-        if (args.OldState == EntityState.Deleted
-            && args.NewState == EntityState.Detached
-            && args.Entry.Entity is IAggregateRoot aggregateRoot)
-        {
-            DeletedAggregateStore.Get(args.Entry.Context).Add(aggregateRoot);
-        }
+        return dbContexts.OfType<IAggregateTrackingContext>().SelectMany(context => context.DeletedAggregates);
     }
 }

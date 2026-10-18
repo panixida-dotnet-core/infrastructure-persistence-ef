@@ -8,7 +8,6 @@ using PANiXiDA.Core.Infrastructure.Persistence.Ef.DbContexts;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.Entities;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.Infrastructure;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Interceptors;
-using PANiXiDA.Core.Infrastructure.Persistence.Ef.Tracking;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Write;
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests;
@@ -30,8 +29,7 @@ public sealed class AggregateChildrenConcurrencyTests(PostgreSqlContainerFixture
         context.Add(aggregate);
         await context.SaveChangesAsync(TestContext.Current.CancellationToken);
         context.ChangeTracker.Clear();
-        using var tracker = new AggregateTracker([context]);
-        var repository = new ChildrenRepository(context, tracker);
+        var repository = new ChildrenRepository(context);
         var loaded = (await repository.GetByIdAsync(aggregate.Id, TestContext.Current.CancellationToken))!;
         var originalVersion = context.Entry(loaded).Property<uint>("xmin").OriginalValue;
         var originalUpdatedAt = context.Entry(loaded).Property<DateTime>("UpdatedAt").CurrentValue;
@@ -75,14 +73,12 @@ public sealed class AggregateChildrenConcurrencyTests(PostgreSqlContainerFixture
         stale.Add(aggregate);
         await stale.SaveChangesAsync(TestContext.Current.CancellationToken);
         stale.ChangeTracker.Clear();
-        using var staleTracker = new AggregateTracker([stale]);
-        var staleRepository = new ChildrenRepository(stale, staleTracker);
+        var staleRepository = new ChildrenRepository(stale);
         var loaded = (await staleRepository.GetByIdAsync(aggregate.Id, TestContext.Current.CancellationToken))!;
         var childVersion = stale.Entry(loaded.Children.Single()).Property<uint>("xmin").OriginalValue;
 
         await using var current = fixture.CreateDbContext<ChildrenWriteDbContext>(database, options => new(options, clock));
-        using var currentTracker = new AggregateTracker([current]);
-        var currentRepository = new ChildrenRepository(current, currentTracker);
+        var currentRepository = new ChildrenRepository(current);
         // Adding a child does not require loading existing children or updating their rows.
         var winner = await current.Set<ParentAggregate>().SingleAsync(TestContext.Current.CancellationToken);
         winner.AddChild("Concurrent addition");
@@ -136,8 +132,8 @@ public sealed class AggregateChildrenConcurrencyTests(PostgreSqlContainerFixture
         public void Advance() => now = now.AddMinutes(1);
     }
 
-    private sealed class ChildrenRepository(ChildrenWriteDbContext context, AggregateTracker tracker)
-        : EfRepository<ChildrenWriteDbContext, TestAggregateRootId, ParentAggregate>(context, tracker)
+    private sealed class ChildrenRepository(ChildrenWriteDbContext context)
+        : EfRepository<ChildrenWriteDbContext, TestAggregateRootId, ParentAggregate>(context)
     {
         protected override IQueryable<ParentAggregate> Query => base.Query.Include(aggregate => aggregate.Children);
     }
