@@ -9,22 +9,6 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.UnitTests;
 
 public sealed class ReadDbModelRegistryTests
 {
-    [Fact(DisplayName = "Read model registry rejects a null assembly")]
-    public void RegisterAssembly_RejectsNullAssembly()
-    {
-        var act = () => ReadDbModelRegistry.RegisterAssembly(null!, (_, _, _) => { });
-
-        act.Should().Throw<ArgumentNullException>().WithParameterName("assembly");
-    }
-
-    [Fact(DisplayName = "Read model registry rejects a null callback")]
-    public void RegisterAssembly_RejectsNullCallback()
-    {
-        var act = () => ReadDbModelRegistry.RegisterAssembly(typeof(ReadDbModelRegistryTests).Assembly, null!);
-
-        act.Should().Throw<ArgumentNullException>().WithParameterName("registerReadDbModels");
-    }
-
     [Fact(DisplayName = "Read model registry does not overwrite an existing registration")]
     public void RegisterAssembly_RejectsDuplicateAssembly()
     {
@@ -34,14 +18,6 @@ public sealed class ReadDbModelRegistryTests
         var act = () => ReadDbModelRegistry.RegisterAssembly(assembly, (_, _, _) => { });
 
         act.Should().Throw<ArgumentException>();
-    }
-
-    [Fact(DisplayName = "Read model registration rejects a null assembly")]
-    public void GetRegistration_RejectsNullAssembly()
-    {
-        var act = () => ReadDbModelRegistry.GetRegistration(null!);
-
-        act.Should().Throw<ArgumentNullException>().WithParameterName("assembly");
     }
 
     [Fact(DisplayName = "Read model registration reports a missing generator")]

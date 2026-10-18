@@ -140,16 +140,7 @@ public sealed class SortingGenerator : IIncrementalGenerator
             .AppendLine("/// <returns>The query ordered by client criteria and remaining defaults, or unchanged when both are empty.</returns>")
             .Append("public static ").Append(queryType).Append(" ApplySorting(").Append(queryType).Append(" query, ").Append(parametersType).AppendLine(" sortingParameters)")
             .AppendLine("{")
-            .AppendLine("global::System.ArgumentNullException.ThrowIfNull(query);")
-            .AppendLine("global::System.ArgumentNullException.ThrowIfNull(sortingParameters);")
-            .AppendLine("global::System.ArgumentNullException.ThrowIfNull(sortingParameters.Fields);")
             .Append("var defaultSorting = GetDefaultSorting<").Append(sortingTypeName).AppendLine(">();")
-            .AppendLine("global::System.ArgumentNullException.ThrowIfNull(defaultSorting);")
-            .AppendLine("global::System.ArgumentNullException.ThrowIfNull(defaultSorting.Fields);")
-            .AppendLine("foreach (var field in global::System.Linq.Enumerable.Concat(sortingParameters.Fields, defaultSorting.Fields))")
-            .AppendLine("{")
-            .AppendLine("global::System.ArgumentNullException.ThrowIfNull(field);")
-            .AppendLine("}")
             .AppendLine("var effectiveSorting = sortingParameters.WithDefault(defaultSorting);");
 
         if (projectionRewriter.Length > 0)

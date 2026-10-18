@@ -282,21 +282,14 @@ public sealed class GeneratedSortingTests(PostgreSqlContainerFixture fixture)
         action.Should().Throw<ArgumentException>();
     }
 
-    [Fact(DisplayName = "Generated sorting returns the original query when empty and validates null arguments")]
-    public void Sorting_HandlesEmptyAndNullArguments()
+    [Fact(DisplayName = "Generated sorting returns the original query when no criteria are specified")]
+    public void Sorting_ReturnsOriginalQueryWhenNoCriteria()
     {
         var query = Array.Empty<ProductView>().AsQueryable();
 
-        NoDefaultProductViewSorting.ApplySorting(query, SortingParameters.None).Should().BeSameAs(query);
-        var missingQuery = () => ProductViewSorting.ApplySorting(null!, SortingParameters.None);
-        var missingSorting = () => ProductViewSorting.ApplySorting(query, null!);
-        var missingFields = () => ProductViewSorting.ApplySorting(query, new SortingParameters(null!));
-        var missingField = () => ProductViewSorting.ApplySorting(query, new SortingParameters([null!]));
+        var result = NoDefaultProductViewSorting.ApplySorting(query, SortingParameters.None);
 
-        missingQuery.Should().Throw<ArgumentNullException>();
-        missingSorting.Should().Throw<ArgumentNullException>();
-        missingFields.Should().Throw<ArgumentNullException>();
-        missingField.Should().Throw<ArgumentNullException>();
+        result.Should().BeSameAs(query);
     }
 
     [Fact(DisplayName = "Sorting class defaults apply to both a page and an unpaginated list")]
@@ -326,20 +319,6 @@ public sealed class GeneratedSortingTests(PostgreSqlContainerFixture fixture)
         items.Select(item => item.Rank).Should().Equal(4, 1, 3, 2);
         sortingParameters.Fields.Should().Equal(new SortField("department.rank", SortDirection.Desc));
         ProductViewSorting.DefaultSorting.Fields.Should().Equal(defaults);
-    }
-
-    [Fact(DisplayName = "Sorting rejects null default parameters, arrays, and criteria")]
-    public void Sorting_RejectsNullDefaults()
-    {
-        var query = Array.Empty<ProductView>().AsQueryable();
-
-        var missingDefaults = () => NullDefaultSorting.ApplySorting(query, SortingParameters.None);
-        var missingFields = () => NullDefaultFieldsSorting.ApplySorting(query, SortingParameters.None);
-        var missingField = () => NullDefaultFieldSorting.ApplySorting(query, SortingParameters.None);
-
-        missingDefaults.Should().Throw<ArgumentNullException>();
-        missingFields.Should().Throw<ArgumentNullException>();
-        missingField.Should().Throw<ArgumentNullException>();
     }
 
     private async Task<WritableReadDbContext> CreateContextAsync()
@@ -481,19 +460,4 @@ internal sealed partial class SummaryViewSorting : IReadModelSorting<SummaryView
 internal sealed partial class LabelViewSorting : IReadModelSorting<LabelView>
 {
     public static SortingParameters DefaultSorting { get; } = SortingParameters.Ascending(nameof(LabelView.Label));
-}
-
-internal sealed partial class NullDefaultSorting : IReadModelSorting<ProductView>
-{
-    public static SortingParameters DefaultSorting { get; } = null!;
-}
-
-internal sealed partial class NullDefaultFieldsSorting : IReadModelSorting<ProductView>
-{
-    public static SortingParameters DefaultSorting { get; } = new(null!);
-}
-
-internal sealed partial class NullDefaultFieldSorting : IReadModelSorting<ProductView>
-{
-    public static SortingParameters DefaultSorting { get; } = new([null!]);
 }

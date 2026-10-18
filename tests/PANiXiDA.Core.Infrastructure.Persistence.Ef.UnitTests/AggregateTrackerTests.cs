@@ -149,19 +149,12 @@ public sealed class AggregateTrackerTests
         act.Should().Throw<InvalidOperationException>().WithMessage("*exactly one write DbContext*");
     }
 
-    [Fact(DisplayName = "AggregateTracker validates null arguments")]
-    public void Arguments_RejectNull()
+    [Fact(DisplayName = "AggregateTracker rejects null entries in the context collection")]
+    public void Constructor_RejectsNullContextEntries()
     {
-        using var context = new TrackerDbContext();
-        using var tracker = new AggregateTracker([context]);
-
-        var nullContexts = () => new AggregateTracker(null!);
         var nullContext = () => new AggregateTracker([null!]);
-        var nullAggregate = () => tracker.Track(null!);
 
-        nullContexts.Should().Throw<ArgumentNullException>().WithParameterName("dbContexts");
         nullContext.Should().Throw<ArgumentException>().WithParameterName("dbContexts");
-        nullAggregate.Should().Throw<ArgumentNullException>().WithParameterName("aggregateRoot");
     }
 
     [Fact(DisplayName = "AggregateTracker Dispose unsubscribes without disposing contexts")]

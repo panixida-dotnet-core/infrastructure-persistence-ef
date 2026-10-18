@@ -19,20 +19,14 @@ public static class EntityConfigurationRegistry
     /// </summary>
     /// <param name="assembly">The assembly containing the entity configurations.</param>
     /// <param name="configureEntities">The callback that applies entity configurations.</param>
-    /// <exception cref="ArgumentNullException">An argument is null.</exception>
     /// <exception cref="ArgumentException">The assembly already has a generated registration.</exception>
     public static void RegisterAssembly(Assembly assembly, Action<ModelBuilder> configureEntities)
     {
-        ArgumentNullException.ThrowIfNull(assembly);
-        ArgumentNullException.ThrowIfNull(configureEntities);
-
         Registrations.Add(assembly, configureEntities);
     }
 
     internal static Action<ModelBuilder> GetRegistration(Assembly assembly)
     {
-        ArgumentNullException.ThrowIfNull(assembly);
-
         RuntimeHelpers.RunModuleConstructor(assembly.ManifestModule.ModuleHandle);
 
         if (Registrations.TryGetValue(assembly, out var registration))

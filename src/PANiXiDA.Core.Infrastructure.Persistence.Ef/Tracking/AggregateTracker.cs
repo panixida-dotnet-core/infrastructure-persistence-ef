@@ -23,7 +23,6 @@ public sealed class AggregateTracker : IAggregateTracker, IDisposable
     /// <param name="dbContexts">The write DbContexts participating in this persistence scope.</param>
     public AggregateTracker(IEnumerable<DbContext> dbContexts)
     {
-        ArgumentNullException.ThrowIfNull(dbContexts);
         this.dbContexts = [.. dbContexts.Distinct<DbContext>(ReferenceEqualityComparer.Instance)];
         if (this.dbContexts.Any(dbContext => dbContext is null))
         {
@@ -39,8 +38,6 @@ public sealed class AggregateTracker : IAggregateTracker, IDisposable
     /// <inheritdoc />
     public void Track(IAggregateRoot aggregateRoot)
     {
-        ArgumentNullException.ThrowIfNull(aggregateRoot);
-
         var matchingContexts = dbContexts
             .Where(context => context.Model.FindRuntimeEntityType(aggregateRoot.GetType()) is not null)
             .ToArray();

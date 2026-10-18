@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 
 using PANiXiDA.Core.Application.Persistence.Errors;
+using PANiXiDA.Core.Domain.AggregateRoots;
 using PANiXiDA.Core.Domain.Entities;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.DbContexts;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.Entities;
@@ -80,9 +81,14 @@ public sealed class XminConcurrencyTests(PostgreSqlContainerFixture fixture)
     {
         await using var context = await CreateContextAsync();
 
-        var aggregateToken = context.Model.FindEntityType(typeof(TestAggregateRoot))!.FindProperty("xmin");
+        var aggregateType = context.Model.FindEntityType(typeof(TestAggregateRoot))!;
+        var aggregateToken = aggregateType.FindProperty("xmin");
         var entityToken = context.Model.FindEntityType(typeof(ChildEntity))!.FindProperty("xmin");
 
+        context.Model.FindEntityType(typeof(Entity<TestAggregateRootId>)).Should().BeNull();
+        context.Model.FindEntityType(typeof(AggregateRoot<TestAggregateRootId>)).Should().BeNull();
+        aggregateType.BaseType.Should().BeNull();
+        aggregateType.FindDiscriminatorProperty().Should().BeNull();
         foreach (var property in new[] { aggregateToken, entityToken })
         {
             property.Should().NotBeNull();
