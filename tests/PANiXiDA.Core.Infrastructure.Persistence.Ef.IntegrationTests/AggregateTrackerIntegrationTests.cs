@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.Runtime.CompilerServices;
 
 using Microsoft.EntityFrameworkCore;
@@ -168,18 +169,23 @@ public sealed class AggregateTrackerIntegrationTests(PostgreSqlContainerFixture 
     }
 
     [Theory(DisplayName = "Failed or canceled deletions do not publish stale events on a subsequent successful save")]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task SaveFailure_DoesNotPublishStaleEvents(bool canceled)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task SaveFailure_DoesNotPublishStaleEvents(bool canceled, bool async)
     {
         var services = new ServiceCollection();
+        var cancellationInterceptor = new CancelCommandInterceptor();
+        services.AddSingleton<IInterceptor>(cancellationInterceptor);
         services.AddPostgreSqlWriteEfRepository<DeletionWriteDbContext>(fixture.CreateConfiguration());
         await using var provider = services.BuildServiceProvider();
         await using var scope = provider.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<DeletionWriteDbContext>();
         await context.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
         var tracker = scope.ServiceProvider.GetRequiredService<IAggregateTracker>();
-        await FailDeletionAsync(context, canceled);
+        cancellationInterceptor.Cancel = canceled && !async;
+        await FailDeletionAsync(context, canceled, async);
+        cancellationInterceptor.Cancel = false;
         tracker.GetAll().Should().BeEmpty();
         var aggregate = new DeletedAggregate(TestAggregateRootId.New());
         aggregate.RaiseChangedEvent();
@@ -192,6 +198,44 @@ public sealed class AggregateTrackerIntegrationTests(PostgreSqlContainerFixture 
 
         eventBus.PublishedEvents.Should().ContainSingle().Which.Should().BeOfType<ChangedEvent>();
         tracker.GetAll().Should().BeEmpty();
+    }
+
+    [Theory(DisplayName = "Clearing during save completion does not restore deleted aggregates afterward")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Clear_DuringSaveCompletionDoesNotRestoreDeletedRoots(bool async)
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        var completionInterceptor = new SaveCompletionInterceptor();
+        services.AddSingleton<IInterceptor>(completionInterceptor);
+        services.AddPostgreSqlWriteEfRepository<DeletionWriteDbContext>(fixture.CreateConfiguration());
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<DeletionWriteDbContext>();
+        await context.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
+        var aggregate = new DeletedAggregate(TestAggregateRootId.New());
+        context.Add(aggregate);
+        await context.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var tracker = scope.ServiceProvider.GetRequiredService<IAggregateTracker>();
+        completionInterceptor.OnSaved = tracker.Clear;
+        aggregate.RaiseDeletedEvent();
+        context.Remove(aggregate);
+
+        // Act
+        if (async)
+        {
+            await context.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+        else
+        {
+            context.SaveChanges();
+        }
+
+        // Assert
+        context.ChangeTracker.Entries().Should().BeEmpty();
+        tracker.GetAll().Should().BeEmpty();
+        (await context.Set<DeletedAggregate>().CountAsync(TestContext.Current.CancellationToken)).Should().Be(0);
     }
 
     [Fact(DisplayName = "Saving after tracker disposal does not reactivate deletion capture")]
@@ -277,14 +321,14 @@ public sealed class AggregateTrackerIntegrationTests(PostgreSqlContainerFixture 
         return new WeakReference<DeletedAggregate>(aggregate);
     }
 
-    private static async Task FailDeletionAsync(DeletionWriteDbContext context, bool canceled)
+    private static async Task FailDeletionAsync(DeletionWriteDbContext context, bool canceled, bool async)
     {
         var aggregate = new DeletedAggregate(TestAggregateRootId.New());
         aggregate.RaiseDeletedEvent();
         context.Remove(aggregate);
         try
         {
-            if (canceled)
+            if (canceled && async)
             {
                 using var cancellation = new CancellationTokenSource();
                 cancellation.Cancel();
@@ -352,6 +396,44 @@ public sealed class AggregateTrackerIntegrationTests(PostgreSqlContainerFixture 
         public IReadOnlyCollection<IAggregateRoot> GetAll() => [];
 
         public void Clear() { }
+    }
+
+    private sealed class CancelCommandInterceptor : DbCommandInterceptor
+    {
+        public bool Cancel { get; set; }
+
+        public override InterceptionResult<DbDataReader> ReaderExecuting(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result)
+        {
+            if (Cancel)
+            {
+                throw new OperationCanceledException();
+            }
+
+            return result;
+        }
+    }
+
+    private sealed class SaveCompletionInterceptor : SaveChangesInterceptor
+    {
+        public Action? OnSaved { get; set; }
+
+        public override int SavedChanges(SaveChangesCompletedEventData eventData, int result)
+        {
+            OnSaved?.Invoke();
+            return result;
+        }
+
+        public override ValueTask<int> SavedChangesAsync(
+            SaveChangesCompletedEventData eventData,
+            int result,
+            CancellationToken cancellationToken = default)
+        {
+            OnSaved?.Invoke();
+            return ValueTask.FromResult(result);
+        }
     }
 
     private sealed record ChangedEvent : DomainEvent;
