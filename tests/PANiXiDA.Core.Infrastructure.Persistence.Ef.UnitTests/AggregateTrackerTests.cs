@@ -1,4 +1,8 @@
+using System.Runtime.CompilerServices;
+
 using Microsoft.EntityFrameworkCore;
+
+using PANiXiDA.Core.Domain.AggregateRoots;
 
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Tracking;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.UnitTests.Repositories.Entities;
@@ -7,6 +11,43 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.UnitTests;
 
 public sealed class AggregateTrackerTests
 {
+    [Theory(DisplayName = "AggregateTracker resolves unmapped runtime subclasses of mapped aggregate types")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Track_ResolvesRuntimeType(bool attached)
+    {
+        using var context = new TrackerDbContext();
+        using var tracker = new AggregateTracker([context]);
+        var aggregate = new RuntimeAggregate(TestAggregateRootId.New());
+        if (attached)
+        {
+            context.Add(aggregate);
+        }
+
+        tracker.Track(aggregate);
+
+        context.Entry(aggregate).State.Should().Be(attached ? EntityState.Added : EntityState.Unchanged);
+        tracker.GetAll().Should().ContainSingle().Which.Should().BeSameAs(aggregate);
+    }
+
+    [Theory(DisplayName = "AggregateTracker Clear does not retain aggregates after EF releases them")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Clear_ReleasesDetachedAggregates(bool clearChangeTracker)
+    {
+        using var context = new TrackerDbContext();
+        using var tracker = new AggregateTracker([context]);
+        var reference = TrackAndReleaseAggregate(context, tracker, clearChangeTracker);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        reference.TryGetTarget(out _).Should().BeFalse();
+        GC.KeepAlive(tracker);
+        GC.KeepAlive(context);
+    }
+
     [Fact(DisplayName = "AggregateTracker reads aggregates from EF without explicit Track calls")]
     public void GetAll_ReadsEfTrackedAggregates()
     {
@@ -140,6 +181,31 @@ public sealed class AggregateTrackerTests
         context.ChangeTracker.Entries().Should().ContainSingle();
     }
 
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static WeakReference<TestAggregateRoot> TrackAndReleaseAggregate(
+        TrackerDbContext context,
+        AggregateTracker tracker,
+        bool clearChangeTracker)
+    {
+        var aggregate = new TestAggregateRoot(TestAggregateRootId.New());
+        context.Attach(aggregate);
+        tracker.Clear();
+        if (clearChangeTracker)
+        {
+            context.ChangeTracker.Clear();
+        }
+        else
+        {
+            context.Entry(aggregate).State = EntityState.Detached;
+        }
+
+        return new WeakReference<TestAggregateRoot>(aggregate);
+    }
+
+    private class MappedAggregate(TestAggregateRootId id) : AggregateRoot<TestAggregateRootId>(id);
+
+    private sealed class RuntimeAggregate(TestAggregateRootId id) : MappedAggregate(id);
+
     private sealed class TrackerDbContext : DbContext
     {
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -156,6 +222,11 @@ public sealed class AggregateTrackerTests
                 builder.Property<uint>("xmin").IsRowVersion();
             });
             modelBuilder.Entity<OtherEntity>().HasKey(entity => entity.Id);
+            modelBuilder.Entity<MappedAggregate>(builder =>
+            {
+                builder.HasKey(entity => entity.Id);
+                builder.Property(entity => entity.Id).HasConversion(id => id.Value, value => new TestAggregateRootId(value));
+            });
         }
     }
 

@@ -16,10 +16,19 @@ internal sealed class XminConcurrencyConvention : IModelFinalizingConvention
         foreach (var entityType in modelBuilder.Metadata.GetEntityTypes())
         {
             if (!typeof(IEntity).IsAssignableFrom(entityType.ClrType)
-                || entityType.BaseType is not null
                 || entityType.FindPrimaryKey() is null
-                || entityType.GetTableName() is null
+                || (entityType.GetTableName() is null && !entityType.GetDerivedTypes().Any(derived => derived.GetTableName() is not null))
                 || entityType.IsMappedToJson())
+            {
+                continue;
+            }
+
+            if (entityType.GetMappingStrategy() == RelationalAnnotationNames.TptMappingStrategy)
+            {
+                throw new InvalidOperationException($"Automatic xmin concurrency does not support TPT mapping for domain entity '{entityType.Name}'. Use TPH or TPC mapping instead.");
+            }
+
+            if (entityType.BaseType is not null)
             {
                 continue;
             }

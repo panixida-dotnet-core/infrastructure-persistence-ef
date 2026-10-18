@@ -14,6 +14,41 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests;
 [Collection(PostgreSqlCollection.Name)]
 public sealed class XminConcurrencyTests(PostgreSqlContainerFixture fixture)
 {
+    [Fact(DisplayName = "Automatic xmin protects concrete rows inherited from an abstract TPC domain entity")]
+    public async Task SaveChanges_TpcHierarchyRejectsStaleDerivedUpdate()
+    {
+        var database = PostgreSqlContainerFixture.CreateDatabaseName();
+        await using var stale = await fixture.CreateInitializedDbContextAsync<TpcWriteDbContext>(database, options => new(options));
+        var entity = new ConcreteEntity { Name = "Original" };
+        stale.Add(entity);
+        await stale.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await using var current = fixture.CreateDbContext<TpcWriteDbContext>(database, options => new(options));
+        var changed = await current.Set<ConcreteEntity>().SingleAsync(TestContext.Current.CancellationToken);
+        changed.Name = "Concurrent update";
+        await current.SaveChangesAsync(TestContext.Current.CancellationToken);
+        entity.Name = "Stale update";
+
+        Func<Task> act = () => stale.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        await act.Should().ThrowAsync<ConcurrencyException>();
+        current.ChangeTracker.Clear();
+        (await current.Set<ConcreteEntity>().SingleAsync(TestContext.Current.CancellationToken)).Name.Should().Be("Concurrent update");
+    }
+
+    [Theory(DisplayName = "Automatic xmin rejects TPT domain hierarchies instead of leaving derived rows unprotected")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Model_RejectsTptDomainHierarchy(bool explicitVersion)
+    {
+        using var context = explicitVersion
+            ? (DbContext)new ExplicitTptWriteDbContext(fixture.CreateOptions<ExplicitTptWriteDbContext>("unused"))
+            : new TptWriteDbContext(fixture.CreateOptions<TptWriteDbContext>("unused"));
+
+        var act = () => context.Model;
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*xmin*TPT*");
+    }
+
     [Fact(DisplayName = "Automatic xmin reuses explicit row versions and supports inherited and shared-row entity mappings")]
     public async Task Model_PreservesExplicitVersionsAndSharedRows()
     {
@@ -185,6 +220,46 @@ public sealed class XminConcurrencyTests(PostgreSqlContainerFixture fixture)
     }
 
     private sealed class DerivedEntity : BaseEntity;
+
+    private abstract class AbstractEntity : IEntity
+    {
+        public Guid Id { get; set; } = Guid.NewGuid();
+    }
+
+    private sealed class ConcreteEntity : AbstractEntity
+    {
+        public string Name { get; set; } = string.Empty;
+    }
+
+    private sealed class TpcWriteDbContext(DbContextOptions<TpcWriteDbContext> options)
+        : WriteDbContext<TpcWriteDbContext>(options, [])
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<AbstractEntity>().UseTpcMappingStrategy();
+            modelBuilder.Entity<ConcreteEntity>();
+        }
+    }
+
+    private sealed class TptWriteDbContext(DbContextOptions<TptWriteDbContext> options)
+        : WriteDbContext<TptWriteDbContext>(options, [])
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<BaseEntity>().ToTable("base_entities");
+            modelBuilder.Entity<DerivedEntity>().ToTable("derived_entities");
+        }
+    }
+
+    private sealed class ExplicitTptWriteDbContext(DbContextOptions<ExplicitTptWriteDbContext> options)
+        : WriteDbContext<ExplicitTptWriteDbContext>(options, [])
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<BaseEntity>().UseTptMappingStrategy().Property<uint>("Version").IsRowVersion();
+            modelBuilder.Entity<DerivedEntity>();
+        }
+    }
 
     private sealed class SharedRowEntity : IEntity
     {

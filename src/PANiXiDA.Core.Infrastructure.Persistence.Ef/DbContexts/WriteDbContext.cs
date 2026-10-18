@@ -5,6 +5,7 @@ using PANiXiDA.Core.Application.Persistence.Errors;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Conventions;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Extensions;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Registries;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Tracking;
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.DbContexts;
 
@@ -23,9 +24,12 @@ public abstract class WriteDbContext<TDbContext>(
     /// <exception cref="ConcurrencyException">The expected entity version no longer exists.</exception>
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
+        var deletedAggregates = DeletedAggregateStore.GetDeletedEntries(this);
         try
         {
-            return base.SaveChanges(acceptAllChangesOnSuccess);
+            var result = base.SaveChanges(acceptAllChangesOnSuccess);
+            DeletedAggregateStore.Retain(this, deletedAggregates);
+            return result;
         }
         catch (DbUpdateConcurrencyException exception)
         {
@@ -37,9 +41,12 @@ public abstract class WriteDbContext<TDbContext>(
     /// <exception cref="ConcurrencyException">The expected entity version no longer exists.</exception>
     public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
+        var deletedAggregates = DeletedAggregateStore.GetDeletedEntries(this);
         try
         {
-            return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+            var result = await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+            DeletedAggregateStore.Retain(this, deletedAggregates);
+            return result;
         }
         catch (DbUpdateConcurrencyException exception)
         {

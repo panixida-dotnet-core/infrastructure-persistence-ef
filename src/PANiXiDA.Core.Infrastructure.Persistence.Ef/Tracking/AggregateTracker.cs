@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 
@@ -12,8 +14,7 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Tracking;
 public sealed class AggregateTracker : IAggregateTracker, IDisposable
 {
     private readonly DbContext[] dbContexts;
-    private readonly HashSet<IAggregateRoot> ignoredAggregateRoots = new(ReferenceEqualityComparer.Instance);
-    private readonly HashSet<IAggregateRoot> deletedAggregateRoots = new(ReferenceEqualityComparer.Instance);
+    private readonly ConditionalWeakTable<IAggregateRoot, object> ignoredAggregateRoots = new();
 
     /// <summary>
     /// Initializes a tracker for the specified write DbContexts without taking ownership of them.
@@ -40,10 +41,10 @@ public sealed class AggregateTracker : IAggregateTracker, IDisposable
         ArgumentNullException.ThrowIfNull(aggregateRoot);
 
         var matchingContexts = dbContexts
-            .Where(context => context.Model.FindEntityType(aggregateRoot.GetType()) is not null)
+            .Where(context => context.Model.FindRuntimeEntityType(aggregateRoot.GetType()) is not null)
             .ToArray();
         if (!matchingContexts.Any(context => context.Entry(aggregateRoot).State != EntityState.Detached)
-            && !deletedAggregateRoots.Contains(aggregateRoot))
+            && !dbContexts.Any(context => DeletedAggregateStore.Get(context).Contains(aggregateRoot)))
         {
             if (matchingContexts.Length != 1)
             {
@@ -63,9 +64,9 @@ public sealed class AggregateTracker : IAggregateTracker, IDisposable
             .SelectMany(context => context.ChangeTracker.Entries())
             .Select(entry => entry.Entity)
             .OfType<IAggregateRoot>()
-            .Concat(deletedAggregateRoots)
+            .Concat(dbContexts.SelectMany(DeletedAggregateStore.Get))
             .Distinct<IAggregateRoot>(ReferenceEqualityComparer.Instance)
-            .Where(aggregateRoot => !ignoredAggregateRoots.Contains(aggregateRoot))];
+            .Where(aggregateRoot => !ignoredAggregateRoots.TryGetValue(aggregateRoot, out _))];
     }
 
     /// <inheritdoc />
@@ -73,10 +74,10 @@ public sealed class AggregateTracker : IAggregateTracker, IDisposable
     {
         foreach (var aggregateRoot in GetAll())
         {
-            ignoredAggregateRoots.Add(aggregateRoot);
+            ignoredAggregateRoots.GetValue(aggregateRoot, _ => new object());
         }
 
-        deletedAggregateRoots.Clear();
+        ClearDeletedAggregates();
     }
 
     /// <summary>
@@ -89,16 +90,24 @@ public sealed class AggregateTracker : IAggregateTracker, IDisposable
             dbContext.ChangeTracker.StateChanged -= OnStateChanged;
         }
         ignoredAggregateRoots.Clear();
-        deletedAggregateRoots.Clear();
+        ClearDeletedAggregates();
     }
 
-    private void OnStateChanged(object? sender, EntityStateChangedEventArgs args)
+    private void ClearDeletedAggregates()
+    {
+        foreach (var dbContext in dbContexts)
+        {
+            DeletedAggregateStore.Get(dbContext).Clear();
+        }
+    }
+
+    private static void OnStateChanged(object? sender, EntityStateChangedEventArgs args)
     {
         if (args.OldState == EntityState.Deleted
             && args.NewState == EntityState.Detached
             && args.Entry.Entity is IAggregateRoot aggregateRoot)
         {
-            deletedAggregateRoots.Add(aggregateRoot);
+            DeletedAggregateStore.Get(args.Entry.Context).Add(aggregateRoot);
         }
     }
 }
