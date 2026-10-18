@@ -207,6 +207,28 @@ public sealed class AggregateTrackerTests
         context.ChangeTracker.Entries().Should().ContainSingle();
     }
 
+    [Fact(DisplayName = "Disposing an aggregate tracker removes all subscriptions to a live context")]
+    public void Dispose_ReleasesTrackerWhileContextRemainsAlive()
+    {
+        using var context = new TrackerDbContext();
+        var reference = CreateAndDisposeTracker(context);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        reference.TryGetTarget(out _).Should().BeFalse();
+        GC.KeepAlive(context);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static WeakReference<AggregateTracker> CreateAndDisposeTracker(TrackerDbContext context)
+    {
+        var tracker = new AggregateTracker([context]);
+        tracker.Dispose();
+        return new WeakReference<AggregateTracker>(tracker);
+    }
+
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static WeakReference<TestAggregateRoot> TrackAndReleaseAggregate(
         TrackerDbContext context,

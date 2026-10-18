@@ -24,6 +24,41 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests;
 [Collection(PostgreSqlCollection.Name)]
 public sealed class ServiceCollectionExtensionsTests(PostgreSqlContainerFixture fixture)
 {
+    [Fact(DisplayName = "AggregateTracker retains deletions from multiple write contexts until collection is cleared")]
+    public async Task AggregateTracker_RetainsDeletionsFromAllWriteContexts()
+    {
+        var services = new ServiceCollection();
+        services.AddPostgreSqlWriteEfRepository<TestWriteDbContext>(fixture.CreateConfiguration());
+        services.RemoveAll<IAssemblyWriteRepository>();
+        services.AddPostgreSqlWriteEfRepository<SchemaWriteDbContext>(fixture.CreateConfiguration());
+        services.RemoveAll<IInterceptor>();
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var first = scope.ServiceProvider.GetRequiredService<TestWriteDbContext>();
+        var second = scope.ServiceProvider.GetRequiredService<SchemaWriteDbContext>();
+        await first.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
+        await second.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
+        var firstAggregate = new NoSoftDeleteAggregateRoot(NoSoftDeleteAggregateRootId.New());
+        var secondAggregate = new NoSoftDeleteAggregateRoot(NoSoftDeleteAggregateRootId.New());
+        first.Add(firstAggregate);
+        second.Add(secondAggregate);
+        await first.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await second.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        first.Remove(firstAggregate);
+        second.Remove(secondAggregate);
+        await first.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await second.SaveChangesAsync(false, TestContext.Current.CancellationToken);
+        second.ChangeTracker.AcceptAllChanges();
+        var tracker = scope.ServiceProvider.GetRequiredService<IAggregateTracker>();
+
+        first.ChangeTracker.Entries().Should().BeEmpty();
+        second.ChangeTracker.Entries().Should().BeEmpty();
+        tracker.GetAll().Should().BeEquivalentTo([firstAggregate, secondAggregate]);
+        tracker.Clear();
+        tracker.GetAll().Should().BeEmpty();
+    }
+
     [Fact(DisplayName = "AggregateTracker uses the same scoped instances of all registered write contexts")]
     public void AggregateTracker_CollectsFromAllWriteContexts()
     {
