@@ -9,7 +9,7 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Tracking;
 
 internal static class DeletedAggregateStore
 {
-    private static readonly ConditionalWeakTable<DbContext, HashSet<IAggregateRoot>> Aggregates = new();
+    private static readonly ConditionalWeakTable<DbContext, HashSet<IAggregateRoot>> Aggregates = [];
 
     public static HashSet<IAggregateRoot> Get(DbContext context)
     {
@@ -23,12 +23,9 @@ internal static class DeletedAggregateStore
 
     public static void Retain(DbContext context, IEnumerable<EntityEntry<IAggregateRoot>> entries)
     {
-        foreach (var entry in entries)
+        foreach (var entry in entries.Where(entry => entry.State is EntityState.Deleted or EntityState.Detached))
         {
-            if (entry.State is EntityState.Deleted or EntityState.Detached)
-            {
-                Get(context).Add(entry.Entity);
-            }
+            Get(context).Add(entry.Entity);
         }
     }
 }

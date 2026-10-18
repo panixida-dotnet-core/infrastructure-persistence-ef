@@ -15,7 +15,7 @@ public sealed class AggregateTracker : IAggregateTracker, IDisposable
 {
     private static readonly EventHandler<EntityStateChangedEventArgs> StateChangedHandler = new(OnStateChanged);
     private readonly DbContext[] dbContexts;
-    private readonly ConditionalWeakTable<IAggregateRoot, object> ignoredAggregateRoots = new();
+    private readonly ConditionalWeakTable<IAggregateRoot, object> ignoredAggregateRoots = [];
 
     /// <summary>
     /// Initializes a tracker for the specified write DbContexts without taking ownership of them.
