@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 using PANiXiDA.Core.Application.Persistence;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Constants;
@@ -23,6 +24,33 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests;
 [Collection(PostgreSqlCollection.Name)]
 public sealed class ServiceCollectionExtensionsTests(PostgreSqlContainerFixture fixture)
 {
+    [Fact(DisplayName = "AggregateTracker uses the same scoped instances of all registered write contexts")]
+    public void AggregateTracker_CollectsFromAllWriteContexts()
+    {
+        var services = new ServiceCollection();
+        var configuration = fixture.CreateConfiguration();
+        services.AddPostgreSqlWriteEfRepository<TestWriteDbContext>(configuration);
+        services.RemoveAll<IAssemblyWriteRepository>();
+        services.AddPostgreSqlWriteEfRepository<SchemaWriteDbContext>(configuration);
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var first = scope.ServiceProvider.GetRequiredService<TestWriteDbContext>();
+        var second = scope.ServiceProvider.GetRequiredService<SchemaWriteDbContext>();
+        var tracker = scope.ServiceProvider.GetRequiredService<IAggregateTracker>();
+        var firstAggregate = new TestAggregateRoot(TestAggregateRootId.New());
+        var secondAggregate = new TestAggregateRoot(TestAggregateRootId.New());
+
+        first.Add(firstAggregate);
+        second.Add(secondAggregate);
+        tracker.Track(secondAggregate);
+
+        tracker.GetAll().Should().BeEquivalentTo([firstAggregate, secondAggregate]);
+        scope.ServiceProvider.GetServices<DbContext>().Should().Equal(first, second);
+        scope.ServiceProvider.GetRequiredService<IAggregateTracker>().Should().BeSameAs(tracker);
+        using var otherScope = provider.CreateScope();
+        otherScope.ServiceProvider.GetRequiredService<IAggregateTracker>().GetAll().Should().BeEmpty();
+    }
+
     [Fact(DisplayName = "AddPostgreSqlEfRepository registers write and read infrastructure and repositories")]
     public void AddPostgreSqlEfRepository_RegistersWriteAndReadInfrastructureAndRepositories()
     {

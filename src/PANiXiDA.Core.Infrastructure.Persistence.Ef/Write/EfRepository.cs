@@ -32,9 +32,9 @@ public abstract class EfRepository<TDbContext, TId,
     protected readonly DbSet<TAggregateRoot> DbSet = dbContext.Set<TAggregateRoot>();
 
     /// <summary>
-    /// Gets the base read query used by repository lookup operations.
+    /// Gets the tracking query used to load aggregate roots for modification.
     /// </summary>
-    protected virtual IQueryable<TAggregateRoot> Query => DbSet.AsNoTracking();
+    protected virtual IQueryable<TAggregateRoot> Query => DbSet.AsTracking();
 
     /// <inheritdoc />
     public virtual Task<TAggregateRoot?> GetByIdAsync(

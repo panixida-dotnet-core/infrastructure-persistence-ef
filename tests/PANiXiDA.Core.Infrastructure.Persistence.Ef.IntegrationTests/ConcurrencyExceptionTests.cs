@@ -86,7 +86,7 @@ public sealed class ConcurrencyExceptionTests(PostgreSqlContainerFixture fixture
         actual.Should().BeSameAs(original);
     }
 
-    [Theory(DisplayName = "Write context respects concurrency suppression by an interceptor")]
+    [Theory(DisplayName = "Write context respects concurrency suppression for a missing-row deletion")]
     [InlineData(false)]
     [InlineData(true)]
     public async Task SaveChanges_PreservesSuppression(bool useAsync)
@@ -94,7 +94,7 @@ public sealed class ConcurrencyExceptionTests(PostgreSqlContainerFixture fixture
         var observer = new ConcurrencyObserver { Suppress = true };
         await using var context = await fixture.CreateInitializedDbContextAsync<ConcurrencyWriteDbContext>(
             options => new(options, [observer]));
-        context.Update(new TestAggregateRoot(TestAggregateRootId.New()) { Name = "Missing" });
+        context.Remove(new TestAggregateRoot(TestAggregateRootId.New()) { Name = "Missing" });
 
         var exception = await Record.ExceptionAsync(() => SaveAsync(context, useAsync, false));
 
