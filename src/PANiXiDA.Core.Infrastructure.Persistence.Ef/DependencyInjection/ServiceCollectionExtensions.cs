@@ -136,6 +136,7 @@ public static class ServiceCollectionExtensions
 
         serviceCollection.TryAddEnumerable(
             ServiceDescriptor.Scoped<DbContext, TWriteDbContext>(provider => provider.GetRequiredService<TWriteDbContext>()));
+
         serviceCollection.TryAddScoped<IAggregateTracker, AggregateTracker>();
         serviceCollection.TryAddKeyedScoped<IUnitOfWork, EfUnitOfWork<TWriteDbContext>>(
             typeof(TWriteDbContext));
