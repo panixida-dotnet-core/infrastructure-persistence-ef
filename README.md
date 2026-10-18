@@ -183,6 +183,12 @@ public sealed class OrderRepository(
 
 `EfUnitOfWork` preserves failures from the action, `SaveChangesAsync`, commit, rollback and transaction disposal. Disposal is attempted even if rollback or commit fails. A single failure is rethrown with its original exception instance and stack trace; multiple failures produce an `AggregateException` in execution order. Existing aggregates are preserved; use `Flatten()` to inspect nested failures. A single cancellation remains cancellation; cancellation combined with another failure is reported as an aggregate failure.
 
+`WriteDbContext` translates `DbUpdateConcurrencyException` from synchronous and asynchronous saves
+to Application `ConcurrencyException`, preserving the EF exception as `InnerException`.
+Existing callers catching the EF exception should catch the Application exception instead.
+Other failures and cancellation are unchanged; concurrency suppression by interceptors is respected.
+Entity version checks still require a configured concurrency token. Bulk updates/deletes are outside this save pipeline.
+
 ### Read Models
 
 Projected models used by `IReadModelMapper` and `EfReadRepository.GetByIdAsync` / `GetPagedResultAsync`

@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
+using PANiXiDA.Core.Application.Persistence.Errors;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Extensions;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Registries;
 
@@ -17,6 +18,34 @@ public abstract class WriteDbContext<TDbContext>(
     IEnumerable<IInterceptor> interceptors) : DbContext(options)
     where TDbContext : WriteDbContext<TDbContext>
 {
+    /// <inheritdoc />
+    /// <exception cref="ConcurrencyException">The expected entity version no longer exists.</exception>
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        try
+        {
+            return base.SaveChanges(acceptAllChangesOnSuccess);
+        }
+        catch (DbUpdateConcurrencyException exception)
+        {
+            throw new ConcurrencyException(exception.Message, exception);
+        }
+    }
+
+    /// <inheritdoc />
+    /// <exception cref="ConcurrencyException">The expected entity version no longer exists.</exception>
+    public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException exception)
+        {
+            throw new ConcurrencyException(exception.Message, exception);
+        }
+    }
+
     /// <summary>
     /// Gets a value indicating whether the concrete DbContext name should be used as the default database schema.
     /// </summary>
