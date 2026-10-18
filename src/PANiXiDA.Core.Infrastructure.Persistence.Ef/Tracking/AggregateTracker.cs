@@ -34,8 +34,7 @@ public sealed class AggregateTracker : IAggregateTracker, IDisposable
         var matchingContexts = dbContexts
             .Where(context => context.Model.FindRuntimeEntityType(aggregateRoot.GetType()) is not null)
             .ToArray();
-        if (!matchingContexts.Any(context => context.Entry(aggregateRoot).State != EntityState.Detached)
-            && !GetDeletedAggregates().Contains(aggregateRoot, ReferenceEqualityComparer.Instance))
+        if (!matchingContexts.Any(context => context.Entry(aggregateRoot).State != EntityState.Detached))
         {
             if (matchingContexts.Length != 1)
             {
@@ -55,7 +54,6 @@ public sealed class AggregateTracker : IAggregateTracker, IDisposable
             .SelectMany(context => context.ChangeTracker.Entries())
             .Select(entry => entry.Entity)
             .OfType<IAggregateRoot>()
-            .Concat(GetDeletedAggregates())
             .Distinct<IAggregateRoot>(ReferenceEqualityComparer.Instance)
             .Where(aggregateRoot => !clearedEventIds.TryGetValue(aggregateRoot, out var eventIds)
                 || aggregateRoot.GetDomainEvents().Any(domainEvent => !eventIds.Contains(domainEvent.Id)))];
@@ -69,8 +67,6 @@ public sealed class AggregateTracker : IAggregateTracker, IDisposable
             clearedEventIds.Remove(aggregateRoot);
             clearedEventIds.Add(aggregateRoot, [.. aggregateRoot.GetDomainEvents().Select(domainEvent => domainEvent.Id)]);
         }
-
-        ClearDeletedAggregates();
     }
 
     /// <summary>
@@ -79,19 +75,5 @@ public sealed class AggregateTracker : IAggregateTracker, IDisposable
     public void Dispose()
     {
         clearedEventIds.Clear();
-        ClearDeletedAggregates();
-    }
-
-    private void ClearDeletedAggregates()
-    {
-        foreach (var dbContext in dbContexts.OfType<IAggregateTrackingContext>())
-        {
-            dbContext.ClearDeletedAggregates();
-        }
-    }
-
-    private IEnumerable<IAggregateRoot> GetDeletedAggregates()
-    {
-        return dbContexts.OfType<IAggregateTrackingContext>().SelectMany(context => context.DeletedAggregates);
     }
 }

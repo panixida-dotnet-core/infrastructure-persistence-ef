@@ -19,14 +19,14 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests;
 [Collection(PostgreSqlCollection.Name)]
 public sealed class AggregateTrackerIntegrationTests(PostgreSqlContainerFixture fixture)
 {
-    [Theory(DisplayName = "PublishDomainEventsBehavior publishes subsequent events from the same EF aggregate without Track")]
+    [Theory(DisplayName = "PublishDomainEventsBehavior collects subsequent events only while EF tracks the aggregate")]
     [InlineData(RootChange.None, false)]
     [InlineData(RootChange.None, true)]
     [InlineData(RootChange.Update, false)]
     [InlineData(RootChange.Update, true)]
     [InlineData(RootChange.Delete, false)]
     [InlineData(RootChange.Delete, true)]
-    public async Task Behavior_PublishesNewEventsAfterClear(RootChange change, bool failedFirstCommand)
+    public async Task Behavior_CollectsEventsOnlyFromEfTrackedRoots(RootChange change, bool failedFirstCommand)
     {
         // Arrange
         var services = new ServiceCollection();
@@ -62,8 +62,17 @@ public sealed class AggregateTrackerIntegrationTests(PostgreSqlContainerFixture 
         await behavior.AfterAsync(new TestCommand(), Result.Success(), TestContext.Current.CancellationToken);
 
         // Assert
-        eventBus.PublishedEvents.Should().HaveCount(failedFirstCommand ? 1 : 2).And.OnlyHaveUniqueItems();
-        aggregate.GetDomainEvents().Should().BeEmpty();
+        var expectedCount = failedFirstCommand ? 0 : 1;
+        if (change == RootChange.Delete)
+        {
+            aggregate.GetDomainEvents().Should().ContainSingle();
+        }
+        else
+        {
+            expectedCount++;
+            aggregate.GetDomainEvents().Should().BeEmpty();
+        }
+        eventBus.PublishedEvents.Should().HaveCount(expectedCount).And.OnlyHaveUniqueItems();
         tracker.GetAll().Should().BeEmpty();
         context.Entry(aggregate).State.Should().Be(change == RootChange.Delete ? EntityState.Detached : EntityState.Unchanged);
         if (change == RootChange.None)
@@ -72,12 +81,16 @@ public sealed class AggregateTrackerIntegrationTests(PostgreSqlContainerFixture 
         }
     }
 
-    [Theory(DisplayName = "AggregateTracker resolved after saving retains hard-deleted roots and their domain events")]
-    [InlineData(false, false)]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    [InlineData(true, true)]
-    public async Task GetAll_RetainsDeletionBeforeTrackerResolution(bool async, bool acceptLater)
+    [Theory(DisplayName = "AggregateTracker excludes hard-deleted roots after EF accepts changes regardless of resolution order")]
+    [InlineData(false, false, false)]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, false)]
+    [InlineData(false, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, false)]
+    [InlineData(true, true, true)]
+    public async Task GetAll_ExcludesHardDeletedRoots(bool async, bool acceptLater, bool resolveBeforeSave)
     {
         // Arrange
         var services = new ServiceCollection();
@@ -89,6 +102,7 @@ public sealed class AggregateTrackerIntegrationTests(PostgreSqlContainerFixture 
         var aggregate = new DeletedAggregate(TestAggregateRootId.New());
         context.Add(aggregate);
         await context.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var tracker = resolveBeforeSave ? scope.ServiceProvider.GetRequiredService<IAggregateTracker>() : null;
         aggregate.RaiseDeletedEvent();
         context.Remove(aggregate);
 
@@ -105,13 +119,12 @@ public sealed class AggregateTrackerIntegrationTests(PostgreSqlContainerFixture 
         {
             context.ChangeTracker.AcceptAllChanges();
         }
-        var tracker = scope.ServiceProvider.GetRequiredService<IAggregateTracker>();
+        tracker ??= scope.ServiceProvider.GetRequiredService<IAggregateTracker>();
 
         // Assert
         context.ChangeTracker.Entries().Should().BeEmpty();
-        tracker.GetAll().Should().ContainSingle().Which.Should().BeSameAs(aggregate);
-        tracker.GetAll().Single().GetDomainEvents().Should().ContainSingle().Which.Should().BeOfType<DeletedEvent>();
-        tracker.Track(aggregate);
+        tracker.GetAll().Should().BeEmpty();
+        aggregate.GetDomainEvents().Should().ContainSingle().Which.Should().BeOfType<DeletedEvent>();
         context.Entry(aggregate).State.Should().Be(EntityState.Detached);
         (await context.Set<DeletedAggregate>().CountAsync(TestContext.Current.CancellationToken)).Should().Be(0);
         tracker.Clear();

@@ -97,8 +97,8 @@ public sealed class EfRepositoryTests(PostgreSqlContainerFixture fixture)
         tracker.GetAll().Should().BeEmpty();
     }
 
-    [Fact(DisplayName = "EfRepository DeleteAsync persists aggregate deletion and tracks it")]
-    public async Task DeleteAsync_PersistsAggregateDeletionAndTracksIt()
+    [Fact(DisplayName = "EfRepository DeleteAsync persists aggregate deletion and excludes it from event collection")]
+    public async Task DeleteAsync_PersistsAggregateDeletionAndExcludesItFromEventCollection()
     {
         await using var context = await CreateContextAsync();
         var aggregateRoot = new TestAggregateRoot(TestAggregateRootId.New())
@@ -118,7 +118,7 @@ public sealed class EfRepositoryTests(PostgreSqlContainerFixture fixture)
             .AsNoTracking()
             .AnyAsync(item => item.Id == aggregateRoot.Id, TestContext.Current.CancellationToken);
         aggregateRootExists.Should().BeFalse();
-        tracker.GetAll().Should().ContainSingle().Which.Should().BeSameAs(aggregateRoot);
+        tracker.GetAll().Should().BeEmpty();
     }
 
     [Fact(DisplayName = "EfRepository exposes base query and DbSet to derived repositories")]
