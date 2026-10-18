@@ -13,6 +13,7 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Tracking;
 /// </summary>
 public sealed class AggregateTracker : IAggregateTracker, IDisposable
 {
+    private static readonly EventHandler<EntityStateChangedEventArgs> StateChangedHandler = new(OnStateChanged);
     private readonly DbContext[] dbContexts;
     private readonly ConditionalWeakTable<IAggregateRoot, object> ignoredAggregateRoots = new();
 
@@ -31,7 +32,7 @@ public sealed class AggregateTracker : IAggregateTracker, IDisposable
 
         foreach (var dbContext in this.dbContexts)
         {
-            dbContext.ChangeTracker.StateChanged += OnStateChanged;
+            dbContext.ChangeTracker.StateChanged += StateChangedHandler;
         }
     }
 
@@ -87,7 +88,7 @@ public sealed class AggregateTracker : IAggregateTracker, IDisposable
     {
         foreach (var dbContext in dbContexts)
         {
-            dbContext.ChangeTracker.StateChanged -= OnStateChanged;
+            dbContext.ChangeTracker.StateChanged -= StateChangedHandler;
         }
         ignoredAggregateRoots.Clear();
         ClearDeletedAggregates();
