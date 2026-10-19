@@ -43,29 +43,20 @@ public abstract class EfRepository<TDbContext, TId,
     }
 
     /// <inheritdoc />
-    public virtual Task AddAsync(
-        TAggregateRoot aggregateRoot,
-        CancellationToken cancellationToken)
+    public virtual void Add(TAggregateRoot aggregateRoot)
     {
         DbSet.Add(aggregateRoot);
-        return dbContext.SaveChangesAsync(cancellationToken);
     }
 
     /// <inheritdoc />
-    public virtual Task UpdateAsync(
-        TAggregateRoot aggregateRoot,
-        CancellationToken cancellationToken)
+    public virtual void Update(TAggregateRoot aggregateRoot)
     {
         DbSet.Update(aggregateRoot);
-        return dbContext.SaveChangesAsync(cancellationToken);
     }
 
     /// <inheritdoc />
-    public virtual Task DeleteAsync(
-        TAggregateRoot aggregateRoot,
-        CancellationToken cancellationToken)
+    public virtual void Delete(TAggregateRoot aggregateRoot)
     {
         DbSet.Remove(aggregateRoot);
-        return dbContext.SaveChangesAsync(cancellationToken);
     }
 }

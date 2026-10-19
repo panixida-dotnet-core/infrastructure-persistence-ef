@@ -22,6 +22,12 @@ public sealed class EfUnitOfWork<TDbContext>(TDbContext dbContext) : IUnitOfWork
     private IDbContextTransaction? currentTransaction;
 
     /// <inheritdoc />
+    public Task SaveChangesAsync(CancellationToken cancellationToken)
+    {
+        return dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
     public bool HasActiveTransaction
     {
         get
@@ -46,7 +52,7 @@ public sealed class EfUnitOfWork<TDbContext>(TDbContext dbContext) : IUnitOfWork
         try
         {
             await action(cancellationToken);
-            await dbContext.SaveChangesAsync(cancellationToken);
+            await SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }
         catch (Exception caughtException)

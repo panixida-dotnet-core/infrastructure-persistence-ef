@@ -102,18 +102,20 @@ public sealed class XminConcurrencyTests(PostgreSqlContainerFixture fixture)
     }
 
     [Fact(DisplayName = "Repository updates a tracked aggregate and refreshes its shadow xmin")]
-    public async Task UpdateAsync_RefreshesShadowXmin()
+    public async Task SaveChanges_RefreshesShadowXmin()
     {
         await using var context = await CreateContextAsync();
         var repository = new XminRepository(context);
         var entity = new TestAggregateRoot(TestAggregateRootId.New()) { Name = "Original" };
-        await repository.AddAsync(entity, TestContext.Current.CancellationToken);
+        repository.Add(entity);
+        await new EfUnitOfWork<XminWriteDbContext>(context).SaveChangesAsync(TestContext.Current.CancellationToken);
         context.ChangeTracker.Clear();
         var loaded = (await repository.GetByIdAsync(entity.Id, TestContext.Current.CancellationToken))!;
         var originalVersion = context.Entry(loaded).Property<uint>("xmin").OriginalValue;
 
         loaded.Name = "Updated";
-        await repository.UpdateAsync(loaded, TestContext.Current.CancellationToken);
+        repository.Update(loaded);
+        await new EfUnitOfWork<XminWriteDbContext>(context).SaveChangesAsync(TestContext.Current.CancellationToken);
 
         originalVersion.Should().NotBe(0);
         context.Entry(loaded).Property<uint>("xmin").CurrentValue.Should().NotBe(originalVersion);
@@ -140,9 +142,15 @@ public sealed class XminConcurrencyTests(PostgreSqlContainerFixture fixture)
         await current.SaveChangesAsync(TestContext.Current.CancellationToken);
         loaded.Name = "Stale update";
 
-        Func<Task> act = () => delete
-            ? repository.DeleteAsync(loaded, TestContext.Current.CancellationToken)
-            : repository.UpdateAsync(loaded, TestContext.Current.CancellationToken);
+        if (delete)
+        {
+            repository.Delete(loaded);
+        }
+        else
+        {
+            repository.Update(loaded);
+        }
+        Func<Task> act = () => new EfUnitOfWork<XminWriteDbContext>(stale).SaveChangesAsync(TestContext.Current.CancellationToken);
 
         (await act.Should().ThrowAsync<ConcurrencyException>()).Which.InnerException.Should().BeOfType<DbUpdateConcurrencyException>();
         current.ChangeTracker.Clear();

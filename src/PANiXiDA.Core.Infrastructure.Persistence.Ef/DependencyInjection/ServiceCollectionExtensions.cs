@@ -105,11 +105,10 @@ public static class ServiceCollectionExtensions
         string connectionString)
         where TWriteDbContext : WriteDbContext<TWriteDbContext>
     {
-        serviceCollection.AddDbContext<TWriteDbContext>((provider, options) =>
+        serviceCollection.AddDbContext<TWriteDbContext>(options =>
         {
             options.UseNpgsql(connectionString);
             options.UseSnakeCaseNamingConvention();
-            options.AddInterceptors(provider.GetRequiredService<AggregateTrackingInterceptor>());
         });
     }
 
@@ -139,8 +138,6 @@ public static class ServiceCollectionExtensions
             ServiceDescriptor.Scoped<DbContext, TWriteDbContext>(provider => provider.GetRequiredService<TWriteDbContext>()));
 
         serviceCollection.TryAddScoped<IAggregateTracker, AggregateTracker>();
-        serviceCollection.TryAddScoped(provider => new AggregateTrackingInterceptor(
-            () => provider.GetRequiredService<IAggregateTracker>()));
 
         serviceCollection.TryAddKeyedScoped<IUnitOfWork, EfUnitOfWork<TWriteDbContext>>(
             typeof(TWriteDbContext));

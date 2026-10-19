@@ -12,24 +12,9 @@ internal sealed class WriteRepository : IWriteRepositoryContract
         return Task.FromResult<TestAggregateRoot?>(null);
     }
 
-    public Task AddAsync(
-        TestAggregateRoot aggregateRoot,
-        CancellationToken cancellationToken)
-    {
-        return Task.CompletedTask;
-    }
+    public void Add(TestAggregateRoot aggregateRoot) { }
 
-    public Task UpdateAsync(
-        TestAggregateRoot aggregateRoot,
-        CancellationToken cancellationToken)
-    {
-        return Task.CompletedTask;
-    }
+    public void Update(TestAggregateRoot aggregateRoot) { }
 
-    public Task DeleteAsync(
-        TestAggregateRoot aggregateRoot,
-        CancellationToken cancellationToken)
-    {
-        return Task.CompletedTask;
-    }
+    public void Delete(TestAggregateRoot aggregateRoot) { }
 }

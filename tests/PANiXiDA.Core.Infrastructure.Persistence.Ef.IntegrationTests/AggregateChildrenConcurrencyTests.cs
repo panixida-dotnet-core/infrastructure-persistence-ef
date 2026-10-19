@@ -19,7 +19,7 @@ public sealed class AggregateChildrenConcurrencyTests(PostgreSqlContainerFixture
     [InlineData(ChildChange.Add)]
     [InlineData(ChildChange.Update)]
     [InlineData(ChildChange.Delete)]
-    public async Task UpdateAsync_ChildChangeRefreshesRootVersion(ChildChange change)
+    public async Task SaveChanges_ChildChangeRefreshesRootVersion(ChildChange change)
     {
         // Arrange
         var clock = new TestTimeProvider();
@@ -37,7 +37,9 @@ public sealed class AggregateChildrenConcurrencyTests(PostgreSqlContainerFixture
 
         // Act
         ChangeChild(loaded, change);
-        await repository.UpdateAsync(loaded, TestContext.Current.CancellationToken);
+        repository.Update(loaded);
+        context.Entry(loaded).Property<uint>("xmin").CurrentValue.Should().Be(originalVersion);
+        await new EfUnitOfWork<ChildrenWriteDbContext>(context).SaveChangesAsync(TestContext.Current.CancellationToken);
 
         // Assert
         var savedVersion = context.Entry(loaded).Property<uint>("xmin").CurrentValue;
@@ -62,7 +64,7 @@ public sealed class AggregateChildrenConcurrencyTests(PostgreSqlContainerFixture
     [InlineData(ChildChange.Add)]
     [InlineData(ChildChange.Update)]
     [InlineData(ChildChange.Delete)]
-    public async Task UpdateAsync_ChildChangeRejectsStaleRoot(ChildChange change)
+    public async Task SaveChanges_ChildChangeRejectsStaleRoot(ChildChange change)
     {
         // Arrange
         var database = PostgreSqlContainerFixture.CreateDatabaseName();
@@ -83,14 +85,16 @@ public sealed class AggregateChildrenConcurrencyTests(PostgreSqlContainerFixture
         var winner = await current.Set<ParentAggregate>().SingleAsync(TestContext.Current.CancellationToken);
         winner.AddChild("Concurrent addition");
         clock.Advance();
-        await currentRepository.UpdateAsync(winner, TestContext.Current.CancellationToken);
+        currentRepository.Update(winner);
+        await new EfUnitOfWork<ChildrenWriteDbContext>(current).SaveChangesAsync(TestContext.Current.CancellationToken);
         var winnerVersion = current.Entry(winner).Property<uint>("xmin").CurrentValue;
         var winnerUpdatedAt = current.Entry(winner).Property<DateTime>("UpdatedAt").CurrentValue;
         ChangeChild(loaded, change);
         clock.Advance();
 
         // Act
-        Func<Task> act = () => staleRepository.UpdateAsync(loaded, TestContext.Current.CancellationToken);
+        staleRepository.Update(loaded);
+        Func<Task> act = () => new EfUnitOfWork<ChildrenWriteDbContext>(stale).SaveChangesAsync(TestContext.Current.CancellationToken);
 
         // Assert
         var exception = (await act.Should().ThrowAsync<ConcurrencyException>()).Which;

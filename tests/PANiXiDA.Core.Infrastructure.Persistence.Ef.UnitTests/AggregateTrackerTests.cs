@@ -207,7 +207,7 @@ public sealed class AggregateTrackerTests
         context.ChangeTracker.Entries().Should().ContainSingle();
     }
 
-    [Fact(DisplayName = "Disposing an aggregate tracker removes all subscriptions to a live context")]
+    [Fact(DisplayName = "A live context does not retain a disposed aggregate tracker")]
     public void Dispose_ReleasesTrackerWhileContextRemainsAlive()
     {
         using var context = new TrackerDbContext();

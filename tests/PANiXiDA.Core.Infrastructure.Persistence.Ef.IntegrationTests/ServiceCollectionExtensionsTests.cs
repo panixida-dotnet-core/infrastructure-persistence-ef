@@ -24,8 +24,8 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests;
 [Collection(PostgreSqlCollection.Name)]
 public sealed class ServiceCollectionExtensionsTests(PostgreSqlContainerFixture fixture)
 {
-    [Fact(DisplayName = "AggregateTracker retains deletions from multiple write contexts until collection is cleared")]
-    public async Task AggregateTracker_RetainsDeletionsFromAllWriteContexts()
+    [Fact(DisplayName = "AggregateTracker collects pending deletions from multiple write contexts before saving")]
+    public async Task AggregateTracker_CollectsPendingDeletionsFromAllWriteContexts()
     {
         var services = new ServiceCollection();
         services.AddPostgreSqlWriteEfRepository<TestWriteDbContext>(fixture.CreateConfiguration());
@@ -47,15 +47,17 @@ public sealed class ServiceCollectionExtensionsTests(PostgreSqlContainerFixture 
 
         first.Remove(firstAggregate);
         second.Remove(secondAggregate);
+        var tracker = scope.ServiceProvider.GetRequiredService<IAggregateTracker>();
+        tracker.GetAll().Should().BeEquivalentTo([firstAggregate, secondAggregate]);
+        tracker.Clear();
+        first.Entry(firstAggregate).State.Should().Be(EntityState.Deleted);
+        second.Entry(secondAggregate).State.Should().Be(EntityState.Deleted);
         await first.SaveChangesAsync(TestContext.Current.CancellationToken);
         await second.SaveChangesAsync(false, TestContext.Current.CancellationToken);
         second.ChangeTracker.AcceptAllChanges();
-        var tracker = scope.ServiceProvider.GetRequiredService<IAggregateTracker>();
 
         first.ChangeTracker.Entries().Should().BeEmpty();
         second.ChangeTracker.Entries().Should().BeEmpty();
-        tracker.GetAll().Should().BeEquivalentTo([firstAggregate, secondAggregate]);
-        tracker.Clear();
         tracker.GetAll().Should().BeEmpty();
     }
 
