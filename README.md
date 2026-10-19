@@ -179,7 +179,7 @@ public sealed class OrderRepository(AppWriteDbContext dbContext)
 
 `EfRepository` loads aggregate roots with EF tracking, including when the context defaults to no-tracking queries. Load, modify, and save an aggregate within the same scoped write DbContext. Synchronous `Add`, `Update`, and `Delete` register pending changes; `IUnitOfWork.SaveChangesAsync` persists them together. The repository depends only on its DbContext and never calls `IAggregateTracker.Track`. `Update` retains EF's whole-graph `Update` behavior. Read repositories remain no-tracking. Database-backed value generators such as HiLo may access the database while registering an entity; use application-generated IDs when registration must avoid database I/O.
 
-The command pipeline must run `PublishDomainEventsBehavior`, then `SaveChangesBehavior`, then `CommitTransactionBehavior`. `SaveChangesBehavior` saves successful commands with an active transaction; `CommitTransactionAsync` only commits. Outside that pipeline, call `SaveChangesAsync` explicitly or use `ExecuteInTransactionAsync`, which saves after its action and before committing. Saving without an explicit transaction uses EF's normal save transaction.
+The command pipeline runs `PublishDomainEventsBehavior`, then `SaveChangesBehavior`, then `CommitTransactionBehavior`. Successful commands are saved with or without an explicit transaction; `CommitTransactionAsync` only commits. Outside that pipeline, call `SaveChangesAsync` explicitly or use `ExecuteInTransactionAsync`, which saves after its action and before committing. For external event delivery, use an outbox saved atomically with business changes and delivered after commit.
 
 The scoped `AggregateTracker` collects aggregate roots directly from all registered write DbContexts, including aggregates loaded or attached without calling `Track`. `Track` remains available through the application contract: it resolves EF runtime types, including proxies, and attaches a detached aggregate when exactly one supplied context maps its type; when several contexts map it, attach it to the intended context first.
 
@@ -187,7 +187,7 @@ The scoped `AggregateTracker` collects aggregate roots directly from all registe
 
 Pending physical deletions remain in EF tracking while `PublishDomainEventsBehavior` collects their events. The following `SaveChangesBehavior` persists the deletion and EF detaches the root. There is no deleted-root buffer, save-event subscription, or tracking interceptor. Collect events before explicitly saving physical deletions; once EF detaches a root, the tracker no longer returns it. Consumers can still register their own `IAggregateTracker` before registering EF infrastructure, but EF repositories do not notify custom implementations explicitly.
 
-#### Optimistic concurrency and upgrading to version 6
+#### Optimistic concurrency
 
 During model finalization, `WriteDbContext` maps a shadow `uint` property named `xmin` as a row version for keyed domain `IEntity` types mapped to tables. Aggregate roots are included through `IEntity`. Existing `uint` row-version properties are reused, and standalone non-domain types, keyless models, and entities stored inside JSON documents do not receive a separate token. Owned types sharing a row share its token; JSON data belongs to its containing row. Domain classes do not need PostgreSQL properties or attributes.
 
@@ -195,9 +195,9 @@ Domain hierarchies using table-per-type (TPT) mapping are rejected during model 
 
 Inheriting from `Entity<TId>` or `AggregateRoot<TId>` does not by itself create an EF inheritance hierarchy. When only a concrete aggregate is registered in the EF model, its inherited properties belong to that aggregate's table; the domain base classes are not separately mapped entity types.
 
-PostgreSQL already supplies the `xmin` system column. Do not add an ordinary `xmin` column in migrations. Regenerate and review the consuming application's migration/model snapshot after upgrading; the mapping changes, but adding this token alone does not require a physical column. EF compares the original `xmin` on updates and deletions and refreshes it after successful saves. A concurrent modification causes the Application `ConcurrencyException` described below.
+PostgreSQL supplies the `xmin` system column. EF compares its original value on updates and deletions and refreshes it after successful saves. A concurrent modification causes the `ConcurrencyException` described below.
 
-Version 6 requires Domain 4 and Application 6. Replace awaited repository `AddAsync`, `UpdateAsync`, and `DeleteAsync` calls with synchronous `Add`, `Update`, and `Delete`; save once through the command pipeline or explicitly through the unit of work. Database errors and concurrency conflicts now occur during `SaveChangesAsync`.
+Database errors and concurrency conflicts are reported during `SaveChangesAsync`.
 
 Version 6 also changes write queries from detached to tracked entities and replaces the parameterless `AggregateTracker` constructor with `AggregateTracker(IEnumerable<DbContext>)`. Built-in DI registration supplies the scoped write context instances. For manual construction, use `new AggregateTracker([writeContext])`. Detached updates need the original concurrency token: a shadow value is lost after `AsNoTracking` or `ChangeTracker.Clear`. Prefer loading through the write repository; explicitly restore the original token before saving when using a disconnected workflow. Do not reload a fresh token merely to bypass a conflict.
 

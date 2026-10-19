@@ -21,13 +21,16 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests;
 public sealed class AggregateTrackerIntegrationTests(PostgreSqlContainerFixture fixture)
 {
     [Theory(DisplayName = "The command pipeline collects deletion events before saving and skips failed commands")]
-    [InlineData(false, false)]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    [InlineData(true, true)]
-    public async Task Pipeline_CollectsDeletionsBeforeSave(bool resolveBeforeDelete, bool failed)
+    [InlineData(false, false, false)]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, false)]
+    [InlineData(false, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, false)]
+    [InlineData(true, true, true)]
+    public async Task Pipeline_CollectsDeletionsBeforeSave(bool resolveBeforeDelete, bool failed, bool useTransaction)
     {
-        // Arrange
         var services = new ServiceCollection();
         services.AddPostgreSqlWriteEfRepository<DeletionWriteDbContext>(fixture.CreateConfiguration());
         await using var provider = services.BuildServiceProvider();
@@ -41,7 +44,10 @@ public sealed class AggregateTrackerIntegrationTests(PostgreSqlContainerFixture 
         await using var scope = provider.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<DeletionWriteDbContext>();
         var unitOfWork = scope.ServiceProvider.GetRequiredKeyedService<IUnitOfWork>(typeof(DeletionWriteDbContext));
-        await unitOfWork.BeginTransactionAsync(TestContext.Current.CancellationToken);
+        if (useTransaction)
+        {
+            await unitOfWork.BeginTransactionAsync(TestContext.Current.CancellationToken);
+        }
         var aggregate = await context.Set<DeletedAggregate>().SingleAsync(TestContext.Current.CancellationToken);
         var tracker = resolveBeforeDelete ? scope.ServiceProvider.GetRequiredService<IAggregateTracker>() : null;
         aggregate.RaiseEvent();
@@ -51,7 +57,6 @@ public sealed class AggregateTrackerIntegrationTests(PostgreSqlContainerFixture 
         var publish = new PublishDomainEventsBehavior<TestCommand, Result>(eventBus, tracker);
         var result = failed ? Result.Failure(Error.Validation("Rejected.")) : Result.Success();
 
-        // Act
         context.Entry(aggregate).State.Should().Be(EntityState.Deleted);
         tracker.GetAll().Should().ContainSingle().Which.Should().BeSameAs(aggregate);
         (await context.Set<DeletedAggregate>().AsNoTracking().CountAsync(TestContext.Current.CancellationToken)).Should().Be(1);
@@ -60,12 +65,12 @@ public sealed class AggregateTrackerIntegrationTests(PostgreSqlContainerFixture 
         eventBus.PublishedEvents.Should().HaveCount(failed ? 0 : 1);
         await new SaveChangesBehavior<TestCommand, Result>(unitOfWork)
             .AfterAsync(new TestCommand(), result, TestContext.Current.CancellationToken);
+        unitOfWork.HasActiveTransaction.Should().Be(useTransaction);
         await new CommitTransactionBehavior<TestCommand, Result>(unitOfWork)
             .AfterAsync(new TestCommand(), result, TestContext.Current.CancellationToken);
         await new CleanupTransactionBehavior<TestCommand, Result>(unitOfWork)
             .FinallyAsync(new TestCommand(), result, null, TestContext.Current.CancellationToken);
 
-        // Assert
         (await context.Set<DeletedAggregate>().AsNoTracking().CountAsync(TestContext.Current.CancellationToken)).Should().Be(failed ? 1 : 0);
         context.Entry(aggregate).State.Should().Be(failed ? EntityState.Deleted : EntityState.Detached);
         await publish.AfterAsync(new TestCommand(), result, TestContext.Current.CancellationToken);
@@ -77,7 +82,6 @@ public sealed class AggregateTrackerIntegrationTests(PostgreSqlContainerFixture 
     [Fact(DisplayName = "New events on a cleared root are collected before deferred deletion without explicit Track")]
     public async Task Pipeline_RediscoversDeletedRootAfterClear()
     {
-        // Arrange
         var services = new ServiceCollection();
         services.AddPostgreSqlWriteEfRepository<DeletionWriteDbContext>(fixture.CreateConfiguration());
         await using var provider = services.BuildServiceProvider();
@@ -97,7 +101,6 @@ public sealed class AggregateTrackerIntegrationTests(PostgreSqlContainerFixture 
         tracker.GetAll().Should().BeEmpty();
         var originalVersion = context.Entry(aggregate).Property<uint>("xmin").OriginalValue;
 
-        // Act
         aggregate.RaiseEvent();
         repository.Delete(aggregate);
         await publish.AfterAsync(new TestCommand(), Result.Success(), TestContext.Current.CancellationToken);
@@ -105,7 +108,6 @@ public sealed class AggregateTrackerIntegrationTests(PostgreSqlContainerFixture 
         await unitOfWork.SaveChangesAsync(TestContext.Current.CancellationToken);
         await publish.AfterAsync(new TestCommand(), Result.Success(), TestContext.Current.CancellationToken);
 
-        // Assert
         eventBus.PublishedEvents.Should().HaveCount(2).And.OnlyHaveUniqueItems();
         aggregate.GetDomainEvents().Should().BeEmpty();
         tracker.GetAll().Should().BeEmpty();
