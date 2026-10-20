@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using PANiXiDA.Core.Application.Messaging.EventBus;
 using PANiXiDA.Core.Application.Messaging.Mediator.Behaviors;
 using PANiXiDA.Core.Application.Messaging.Mediator.Contracts;
+using PANiXiDA.Core.Application.Messaging.Mediator.Handlers;
 using PANiXiDA.Core.Application.Persistence;
 using PANiXiDA.Core.Domain.AggregateRoots;
 using PANiXiDA.Core.Domain.DomainEvents;
@@ -46,7 +47,8 @@ public sealed class AggregateTrackerIntegrationTests(PostgreSqlContainerFixture 
         var unitOfWork = scope.ServiceProvider.GetRequiredKeyedService<IUnitOfWork>(typeof(DeletionWriteDbContext));
         if (useTransaction)
         {
-            await unitOfWork.BeginTransactionAsync(TestContext.Current.CancellationToken);
+            await new BeginTransactionBehavior<TestCommand, Result, TestCommandHandler>(unitOfWork)
+                .BeforeAsync(new TestCommand(), TestContext.Current.CancellationToken);
         }
         var aggregate = await context.Set<DeletedAggregate>().SingleAsync(TestContext.Current.CancellationToken);
         var tracker = resolveBeforeDelete ? scope.ServiceProvider.GetRequiredService<IAggregateTracker>() : null;
@@ -66,10 +68,14 @@ public sealed class AggregateTrackerIntegrationTests(PostgreSqlContainerFixture 
         await new SaveChangesBehavior<TestCommand, Result>(unitOfWork)
             .AfterAsync(new TestCommand(), result, TestContext.Current.CancellationToken);
         unitOfWork.HasActiveTransaction.Should().Be(useTransaction);
-        await new CommitTransactionBehavior<TestCommand, Result>(unitOfWork)
-            .AfterAsync(new TestCommand(), result, TestContext.Current.CancellationToken);
-        await new CleanupTransactionBehavior<TestCommand, Result>(unitOfWork)
-            .FinallyAsync(new TestCommand(), result, null, TestContext.Current.CancellationToken);
+        if (useTransaction)
+        {
+            await new CommitTransactionBehavior<TestCommand, Result, TestCommandHandler>(unitOfWork)
+                .AfterAsync(new TestCommand(), result, TestContext.Current.CancellationToken);
+            await new CleanupTransactionBehavior<TestCommand, Result, TestCommandHandler>(unitOfWork)
+                .FinallyAsync(new TestCommand(), result, null, TestContext.Current.CancellationToken);
+        }
+        unitOfWork.HasActiveTransaction.Should().BeFalse();
 
         (await context.Set<DeletedAggregate>().AsNoTracking().CountAsync(TestContext.Current.CancellationToken)).Should().Be(failed ? 1 : 0);
         context.Entry(aggregate).State.Should().Be(failed ? EntityState.Deleted : EntityState.Detached);
@@ -139,6 +145,14 @@ public sealed class AggregateTrackerIntegrationTests(PostgreSqlContainerFixture 
     private sealed record DeletedEvent : DomainEvent;
 
     private sealed record TestCommand : ICommand<Result>;
+
+    private sealed class TestCommandHandler : ICommandHandler<TestCommand, Result>, IRequireTransaction
+    {
+        public Task<Result> HandleAsync(TestCommand command, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Result.Success());
+        }
+    }
 
     private sealed class TestEventBus : IEventBus
     {
