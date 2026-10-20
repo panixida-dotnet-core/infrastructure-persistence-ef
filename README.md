@@ -199,7 +199,7 @@ PostgreSQL supplies the `xmin` system column. EF compares its original value on 
 
 Database errors and concurrency conflicts are reported during `SaveChangesAsync`.
 
-Version 6 also changes write queries from detached to tracked entities and replaces the parameterless `AggregateTracker` constructor with `AggregateTracker(IEnumerable<DbContext>)`. Built-in DI registration supplies the scoped write context instances. For manual construction, use `new AggregateTracker([writeContext])`. Detached updates need the original concurrency token: a shadow value is lost after `AsNoTracking` or `ChangeTracker.Clear`. Prefer loading through the write repository; explicitly restore the original token before saving when using a disconnected workflow. Do not reload a fresh token merely to bypass a conflict.
+Version 6 also changes write queries from detached to tracked entities and replaces the parameterless `AggregateTracker` constructor with `AggregateTracker(IEnumerable<DbContext>)`. Built-in DI registration supplies all scoped write context instances through `IEnumerable<DbContext>`. For manual construction, use `new AggregateTracker([writeContext])`. Detached updates need the original concurrency token: a shadow value is lost after `AsNoTracking` or `ChangeTracker.Clear`. Prefer loading through the write repository; explicitly restore the original token before saving when using a disconnected workflow. Do not reload a fresh token merely to bypass a conflict.
 
 The `EfRepository` constructor now accepts only its write DbContext. Remove the `IAggregateTracker` constructor parameter and base-constructor argument from derived EF repositories. The application tracking interface remains unchanged for other persistence adapters.
 
