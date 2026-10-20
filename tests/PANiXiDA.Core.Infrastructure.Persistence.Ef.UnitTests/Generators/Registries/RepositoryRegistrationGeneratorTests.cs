@@ -108,20 +108,11 @@ public sealed class RepositoryRegistrationGeneratorTests
                     return Task.FromResult<Aggregate?>(null);
                 }
 
-                public Task AddAsync(Aggregate aggregateRoot, CancellationToken cancellationToken)
-                {
-                    return Task.CompletedTask;
-                }
+                public void Add(Aggregate aggregateRoot) { }
 
-                public Task UpdateAsync(Aggregate aggregateRoot, CancellationToken cancellationToken)
-                {
-                    return Task.CompletedTask;
-                }
+                public void Update(Aggregate aggregateRoot) { }
 
-                public Task DeleteAsync(Aggregate aggregateRoot, CancellationToken cancellationToken)
-                {
-                    return Task.CompletedTask;
-                }
+                public void Delete(Aggregate aggregateRoot) { }
             }
             """);
 

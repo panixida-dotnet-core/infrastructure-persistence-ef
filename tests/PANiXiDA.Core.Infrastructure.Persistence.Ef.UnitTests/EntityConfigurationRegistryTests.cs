@@ -7,22 +7,6 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.UnitTests;
 
 public sealed class EntityConfigurationRegistryTests
 {
-    [Fact(DisplayName = "Entity configuration registry rejects a null assembly")]
-    public void RegisterAssembly_RejectsNullAssembly()
-    {
-        var act = () => EntityConfigurationRegistry.RegisterAssembly(null!, _ => { });
-
-        act.Should().Throw<ArgumentNullException>().WithParameterName("assembly");
-    }
-
-    [Fact(DisplayName = "Entity configuration registry rejects a null callback")]
-    public void RegisterAssembly_RejectsNullCallback()
-    {
-        var act = () => EntityConfigurationRegistry.RegisterAssembly(typeof(EntityConfigurationRegistryTests).Assembly, null!);
-
-        act.Should().Throw<ArgumentNullException>().WithParameterName("configureEntities");
-    }
-
     [Fact(DisplayName = "Entity configuration registry rejects duplicate registrations")]
     public void RegisterAssembly_RejectsDuplicateAssembly()
     {
@@ -32,14 +16,6 @@ public sealed class EntityConfigurationRegistryTests
         var act = () => EntityConfigurationRegistry.RegisterAssembly(assembly, _ => { });
 
         act.Should().Throw<ArgumentException>();
-    }
-
-    [Fact(DisplayName = "Entity configuration registration rejects a null assembly")]
-    public void GetRegistration_RejectsNullAssembly()
-    {
-        var act = () => EntityConfigurationRegistry.GetRegistration(null!);
-
-        act.Should().Throw<ArgumentNullException>().WithParameterName("assembly");
     }
 
     [Fact(DisplayName = "Entity configuration registration reports a missing generator")]

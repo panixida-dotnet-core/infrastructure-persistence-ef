@@ -81,7 +81,8 @@ public sealed class PostgreSqlContainerFixture : IAsyncLifetime
     {
         var builder = new NpgsqlConnectionStringBuilder(container.GetConnectionString())
         {
-            Database = databaseName
+            Database = databaseName,
+            Pooling = false
         };
 
         return builder.ConnectionString;

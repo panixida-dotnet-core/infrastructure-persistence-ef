@@ -12,30 +12,6 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.UnitTests;
 
 public sealed class RepositoryRegistryTests
 {
-    [Fact(DisplayName = "Generated repository registry rejects null assembly")]
-    public void RegisterAssembly_RejectsNullAssembly()
-    {
-        var act = () => RepositoryRegistry.RegisterAssembly(null!, _ => { }, _ => { });
-
-        act.Should().Throw<ArgumentNullException>().WithParameterName("assembly");
-    }
-
-    [Fact(DisplayName = "Generated repository registry rejects null write callback")]
-    public void RegisterAssembly_RejectsNullWriteCallback()
-    {
-        var act = () => RepositoryRegistry.RegisterAssembly(typeof(RepositoryRegistryTests).Assembly, null!, _ => { });
-
-        act.Should().Throw<ArgumentNullException>().WithParameterName("registerWriteRepositories");
-    }
-
-    [Fact(DisplayName = "Generated repository registry rejects null read callback")]
-    public void RegisterAssembly_RejectsNullReadCallback()
-    {
-        var act = () => RepositoryRegistry.RegisterAssembly(typeof(RepositoryRegistryTests).Assembly, _ => { }, null!);
-
-        act.Should().Throw<ArgumentNullException>().WithParameterName("registerReadRepositories");
-    }
-
     [Fact(DisplayName = "Generated repository registry does not overwrite an existing assembly registration")]
     public void RegisterAssembly_RejectsDuplicateAssembly()
     {
@@ -56,14 +32,6 @@ public sealed class RepositoryRegistryTests
 
         act.Should().Throw<InvalidOperationException>().WithMessage("Generated repository registration was not found*with its analyzers*rebuild it.");
         services.Should().BeEmpty();
-    }
-
-    [Fact(DisplayName = "Repository registration rejects null assembly")]
-    public void GetRegistration_RejectsNullAssembly()
-    {
-        var nullAssembly = () => RepositoryRegistry.GetRegistration(null!);
-
-        nullAssembly.Should().Throw<ArgumentNullException>().WithParameterName("assembly");
     }
 
     [Fact(DisplayName = "Generated write registration registers write repository contracts")]

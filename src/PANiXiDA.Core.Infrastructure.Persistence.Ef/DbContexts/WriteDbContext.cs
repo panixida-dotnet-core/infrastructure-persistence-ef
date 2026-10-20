@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
 using PANiXiDA.Core.Application.Persistence.Errors;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.Conventions;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Extensions;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Registries;
 
@@ -55,6 +56,13 @@ public abstract class WriteDbContext<TDbContext>(
     /// Gets a value indicating whether mapped table names should be converted to plural snake_case names.
     /// </summary>
     protected virtual bool UsePluralTableNames { get; } = true;
+
+    /// <inheritdoc />
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        base.ConfigureConventions(configurationBuilder);
+        configurationBuilder.Conventions.Add(_ => new XminConcurrencyConvention());
+    }
 
     /// <inheritdoc />
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)

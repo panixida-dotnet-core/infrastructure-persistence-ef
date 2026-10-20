@@ -19,20 +19,14 @@ public static class ReadDbModelRegistry
     /// </summary>
     /// <param name="assembly">The assembly containing the read models.</param>
     /// <param name="registerReadDbModels">The callback that configures read models, their tables and query filters.</param>
-    /// <exception cref="ArgumentNullException">An argument is null.</exception>
     /// <exception cref="ArgumentException">The assembly already has a generated registration.</exception>
     public static void RegisterAssembly(Assembly assembly, Action<ModelBuilder, string?, bool> registerReadDbModels)
     {
-        ArgumentNullException.ThrowIfNull(assembly);
-        ArgumentNullException.ThrowIfNull(registerReadDbModels);
-
         Registrations.Add(assembly, registerReadDbModels);
     }
 
     internal static Action<ModelBuilder, string?, bool> GetRegistration(Assembly assembly)
     {
-        ArgumentNullException.ThrowIfNull(assembly);
-
         RuntimeHelpers.RunModuleConstructor(assembly.ManifestModule.ModuleHandle);
 
         if (Registrations.TryGetValue(assembly, out var registration))

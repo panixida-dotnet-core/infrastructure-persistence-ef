@@ -13,6 +13,33 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests;
 [Collection(PostgreSqlCollection.Name)]
 public sealed class EfUnitOfWorkTests(PostgreSqlContainerFixture fixture)
 {
+    [Theory(DisplayName = "SaveChangesAsync persists pending writes without committing the active transaction")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SaveChangesAsync_DoesNotCommitTransaction(bool commit)
+    {
+        var options = await CreateInitializedOptionsAsync();
+        await using var context = new TransactionalDbContext(options);
+        var unitOfWork = new EfUnitOfWork<TransactionalDbContext>(context);
+        await unitOfWork.BeginTransactionAsync(TestContext.Current.CancellationToken);
+        context.Entities.Add(new TransactionalEntity { Id = 1, Name = "Pending" });
+
+        await unitOfWork.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        unitOfWork.HasActiveTransaction.Should().BeTrue();
+        (await context.Entities.CountAsync(TestContext.Current.CancellationToken)).Should().Be(1);
+        (await CountEntitiesAsync(options)).Should().Be(0);
+        if (commit)
+        {
+            await unitOfWork.CommitTransactionAsync(TestContext.Current.CancellationToken);
+        }
+        else
+        {
+            await unitOfWork.RollbackTransactionAsync(TestContext.Current.CancellationToken);
+        }
+        (await CountEntitiesAsync(options)).Should().Be(commit ? 1 : 0);
+    }
+
     [Fact(DisplayName = "ExecuteInTransactionAsync commits and saves changes")]
     public async Task ExecuteInTransactionAsync_CommitsAndSavesChanges()
     {

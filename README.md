@@ -23,8 +23,9 @@ The library is intentionally infrastructure-focused. Domain model design, comman
 - PostgreSQL registration extensions for write/read EF Core infrastructure and automatic scoped repository registration.
 - `WriteDbContext<TDbContext>` with HiLo configuration, optional context-derived schema naming, assembly configuration scanning, and plural table names.
 - `ReadDbContext<TDbContext>` with no-tracking queries, automatic read model registration, optional context-derived schema naming, and migration exclusion for read models.
-- Base `EfRepository<TDbContext, TId, TAggregateRoot>` with async persistence operations integrated with `IAggregateTracker`.
-- `AggregateTracker` implementation for tracking touched aggregate roots independently of EF Core.
+- Base `EfRepository<TDbContext, TId, TAggregateRoot>` with async queries and synchronous methods that register pending changes in EF's change tracker.
+- `AggregateTracker` implementation that collects aggregate roots from the registered write DbContexts' change trackers.
+- Automatic PostgreSQL `xmin` optimistic concurrency tokens for mapped domain entities and aggregate roots.
 - `EfUnitOfWork<TDbContext>` implementation for transaction boundaries.
 - Keyed `IUnitOfWork` registration by write `DbContext` type for modular applications.
 - Auditable entity configuration with `CreatedAt`, `UpdatedAt`, and `DeletedAt` shadow or mapped CLR properties, including value objects.
@@ -141,7 +142,6 @@ Persistence infrastructure does not register a non-keyed `IUnitOfWork`. A host-l
 ```csharp
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-using PANiXiDA.Core.Application.Persistence;
 using PANiXiDA.Core.Domain.Abstractions;
 using PANiXiDA.Core.Domain.AggregateRoots;
 using PANiXiDA.Core.Domain.Identifiers;
@@ -169,24 +169,32 @@ public interface IOrderRepository : IRepository<OrderId, Order>
 {
 }
 
-public sealed class OrderRepository(
-    AppWriteDbContext dbContext,
-    IAggregateTracker aggregateTracker)
-    : EfRepository<AppWriteDbContext, OrderId, Order>(dbContext, aggregateTracker), IOrderRepository
+public sealed class OrderRepository(AppWriteDbContext dbContext)
+    : EfRepository<AppWriteDbContext, OrderId, Order>(dbContext), IOrderRepository
 {
 }
 ```
 
 `WriteDbContext` applies concrete `IEntityTypeConfiguration<TEntity>` implementations from its assembly through the bundled source generator. Keep configuration and entity types `internal` or `public`, and give configurations a parameterless constructor; non-public constructors are supported. Abstract types, open generic types and configurations without a parameterless constructor are skipped. No attributes, partial classes or additional registration calls are needed. Overrides of `ConfigureEntity`, `ConfigureAudit`, `ConfigureSoftDelete` and `IsSoftDeleteEnabled` work as usual.
 
-`EfRepository` persists aggregate roots through `AddAsync`, `UpdateAsync`, and `DeleteAsync`, and tracks touched aggregate roots through `IAggregateTracker`. The built-in write registration adds the generic `AggregateTracker` implementation as scoped, but consumers can register their own tracker before calling the EF registration methods. When a unit-of-work transaction is active, repository saves participate in that transaction and `EfUnitOfWork` commits or rolls it back.
+`EfRepository` loads tracked aggregates. Use the same scoped write DbContext to load, modify, and save them. Synchronous `Add`, `Update`, and `Delete` stage changes; `IUnitOfWork.SaveChangesAsync` persists them and reports database errors. HiLo value generation may access the database during `Add`.
+
+Saving works with or without an explicit transaction; `CommitTransactionAsync` only commits. `ExecuteInTransactionAsync` saves and commits when it creates the transaction; an existing transaction's owner remains responsible for both.
+
+The scoped `AggregateTracker` collects roots from all registered write contexts. `Clear` preserves EF state and original tokens; new events make a cleared root visible again. Collect domain events before saving physical deletions, which detach roots. For external delivery, save an outbox atomically with business changes and dispatch after commit.
+
+#### Optimistic concurrency
+
+`WriteDbContext` automatically configures PostgreSQL `xmin` for keyed domain entities and aggregates mapped to tables. TPH and TPC are supported; TPT and entity splitting (`SplitToTable`) are rejected. Detached updates require the original token.
+
+For child changes, call `Update(root)` before saving to refresh an audited root's `UpdatedAt` and `xmin`. A stale root causes a concurrency conflict and rolls back that save. Configure orphan deletion for children removed from collections. Saving children directly does not automatically update the root's token.
 
 `EfUnitOfWork` preserves failures from the action, `SaveChangesAsync`, commit, rollback and transaction disposal. Disposal is attempted even if rollback or commit fails. A single failure is rethrown with its original exception instance and stack trace; multiple failures produce an `AggregateException` in execution order. Existing aggregates are preserved; use `Flatten()` to inspect nested failures. A single cancellation remains cancellation; cancellation combined with another failure is reported as an aggregate failure.
 
 `WriteDbContext` translates `DbUpdateConcurrencyException` from synchronous and asynchronous saves
 to Application `ConcurrencyException`, preserving the EF exception as `InnerException`.
 Existing callers catching the EF exception should catch the Application exception instead.
-Other failures and cancellation are unchanged; concurrency suppression by interceptors is respected.
+Other failures and cancellation are unchanged. Do not suppress conflicts on `xmin` updates: Npgsql expects a returned row to refresh the generated token.
 Entity version checks still require a configured concurrency token. Bulk updates/deletes are outside this save pipeline.
 
 ### Read Models

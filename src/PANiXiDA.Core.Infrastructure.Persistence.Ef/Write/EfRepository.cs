@@ -1,7 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using Microsoft.EntityFrameworkCore;
 
-using PANiXiDA.Core.Application.Persistence;
 using PANiXiDA.Core.Domain.Abstractions;
 using PANiXiDA.Core.Domain.AggregateRoots;
 using PANiXiDA.Core.Domain.Identifiers;
@@ -17,11 +16,9 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.Write;
 /// <typeparam name="TId">The aggregate root identifier type.</typeparam>
 /// <typeparam name="TAggregateRoot">The aggregate root type.</typeparam>
 /// <param name="dbContext">The DbContext used by the repository.</param>
-/// <param name="aggregateTracker">The tracker used to collect touched aggregate roots.</param>
 public abstract class EfRepository<TDbContext, TId,
     [DynamicallyAccessedMembers(TrimmingConstants.EntityMembers)] TAggregateRoot>(
-    TDbContext dbContext,
-    IAggregateTracker aggregateTracker) : IRepository<TId, TAggregateRoot>
+    TDbContext dbContext) : IRepository<TId, TAggregateRoot>
     where TDbContext : WriteDbContext<TDbContext>
     where TId : struct, IStronglyTypedId
     where TAggregateRoot : AggregateRoot<TId>
@@ -32,9 +29,9 @@ public abstract class EfRepository<TDbContext, TId,
     protected readonly DbSet<TAggregateRoot> DbSet = dbContext.Set<TAggregateRoot>();
 
     /// <summary>
-    /// Gets the base read query used by repository lookup operations.
+    /// Gets the tracking query used to load aggregate roots for modification.
     /// </summary>
-    protected virtual IQueryable<TAggregateRoot> Query => DbSet.AsNoTracking();
+    protected virtual IQueryable<TAggregateRoot> Query => DbSet.AsTracking();
 
     /// <inheritdoc />
     public virtual Task<TAggregateRoot?> GetByIdAsync(
@@ -46,32 +43,20 @@ public abstract class EfRepository<TDbContext, TId,
     }
 
     /// <inheritdoc />
-    public virtual Task AddAsync(
-        TAggregateRoot aggregateRoot,
-        CancellationToken cancellationToken)
+    public virtual void Add(TAggregateRoot aggregateRoot)
     {
         DbSet.Add(aggregateRoot);
-        aggregateTracker.Track(aggregateRoot);
-        return dbContext.SaveChangesAsync(cancellationToken);
     }
 
     /// <inheritdoc />
-    public virtual Task UpdateAsync(
-        TAggregateRoot aggregateRoot,
-        CancellationToken cancellationToken)
+    public virtual void Update(TAggregateRoot aggregateRoot)
     {
         DbSet.Update(aggregateRoot);
-        aggregateTracker.Track(aggregateRoot);
-        return dbContext.SaveChangesAsync(cancellationToken);
     }
 
     /// <inheritdoc />
-    public virtual Task DeleteAsync(
-        TAggregateRoot aggregateRoot,
-        CancellationToken cancellationToken)
+    public virtual void Delete(TAggregateRoot aggregateRoot)
     {
         DbSet.Remove(aggregateRoot);
-        aggregateTracker.Track(aggregateRoot);
-        return dbContext.SaveChangesAsync(cancellationToken);
     }
 }
