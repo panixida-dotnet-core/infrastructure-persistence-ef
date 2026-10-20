@@ -135,10 +135,10 @@ public static class ServiceCollectionExtensions
             ServiceDescriptor.Scoped<IInterceptor, AuditSaveChangesInterceptor>());
 
         serviceCollection.TryAddEnumerable(
-            ServiceDescriptor.Scoped<WriteDbContextAccessor, WriteDbContextAccessor<TWriteDbContext>>());
+            ServiceDescriptor.Scoped<IWriteDbContextAccessor, WriteDbContextAccessor<TWriteDbContext>>());
 
         serviceCollection.TryAddScoped<IAggregateTracker>(provider =>
-            new AggregateTracker(provider.GetServices<WriteDbContextAccessor>().Select(accessor => accessor.Context)));
+            new AggregateTracker(provider.GetServices<IWriteDbContextAccessor>().Select(accessor => accessor.Context)));
 
         serviceCollection.TryAddKeyedScoped<IUnitOfWork, EfUnitOfWork<TWriteDbContext>>(
             typeof(TWriteDbContext));

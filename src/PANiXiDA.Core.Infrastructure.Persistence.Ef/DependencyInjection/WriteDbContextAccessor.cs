@@ -2,13 +2,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.DependencyInjection;
 
-internal abstract class WriteDbContextAccessor
+internal interface IWriteDbContextAccessor
 {
-    public abstract DbContext Context { get; }
+    DbContext Context { get; }
 }
 
-internal sealed class WriteDbContextAccessor<TDbContext>(TDbContext context) : WriteDbContextAccessor
+internal sealed class WriteDbContextAccessor<TDbContext>(TDbContext context) : IWriteDbContextAccessor
     where TDbContext : DbContext
 {
-    public override DbContext Context { get; } = context;
+    public DbContext Context { get; } = context;
 }
