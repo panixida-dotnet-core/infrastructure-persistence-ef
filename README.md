@@ -23,7 +23,7 @@ The library is intentionally infrastructure-focused. Domain model design, comman
 - PostgreSQL registration extensions for write/read EF Core infrastructure and automatic scoped repository registration.
 - `WriteDbContext<TDbContext>` with HiLo configuration, optional context-derived schema naming, assembly configuration scanning, and plural table names.
 - `ReadDbContext<TDbContext>` with no-tracking queries, automatic read model registration, optional context-derived schema naming, and migration exclusion for read models.
-- Base `EfRepository<TDbContext, TId, TAggregateRoot>` with async persistence operations using EF's change tracker.
+- Base `EfRepository<TDbContext, TId, TAggregateRoot>` with async queries and synchronous methods that register pending changes in EF's change tracker.
 - `AggregateTracker` implementation that collects aggregate roots from the registered write DbContexts' change trackers.
 - Automatic PostgreSQL `xmin` optimistic concurrency tokens for mapped domain entities and aggregate roots.
 - `EfUnitOfWork<TDbContext>` implementation for transaction boundaries.
@@ -179,7 +179,7 @@ public sealed class OrderRepository(AppWriteDbContext dbContext)
 
 `EfRepository` loads aggregate roots with EF tracking, including when the context defaults to no-tracking queries. Load, modify, and save an aggregate within the same scoped write DbContext. Synchronous `Add`, `Update`, and `Delete` register pending changes; `IUnitOfWork.SaveChangesAsync` persists them together. The repository depends only on its DbContext and never calls `IAggregateTracker.Track`. `Update` retains EF's whole-graph `Update` behavior. Read repositories remain no-tracking. Database-backed value generators such as HiLo may access the database while registering an entity; use application-generated IDs when registration must avoid database I/O.
 
-The command pipeline runs `PublishDomainEventsBehavior`, then `SaveChangesBehavior`, then `CommitTransactionBehavior`. Successful commands are saved with or without an explicit transaction; `CommitTransactionAsync` only commits. Outside that pipeline, call `SaveChangesAsync` explicitly or use `ExecuteInTransactionAsync`, which saves after its action and before committing. For external event delivery, use an outbox saved atomically with business changes and delivered after commit.
+The command pipeline runs `PublishDomainEventsBehavior`, then `SaveChangesBehavior`, then `CommitTransactionBehavior`. Successful commands are saved with or without an explicit transaction; `CommitTransactionAsync` only commits. Outside that pipeline, call `SaveChangesAsync` explicitly or use `ExecuteInTransactionAsync`. When it creates a transaction, it saves after its action and before committing. When the unit of work already has an active transaction, it only runs the action; the transaction owner must call `SaveChangesAsync` and `CommitTransactionAsync`. For external event delivery, use an outbox saved atomically with business changes and delivered after commit.
 
 The scoped `AggregateTracker` collects aggregate roots directly from all registered write DbContexts, including aggregates loaded or attached without calling `Track`. `Track` remains available through the application contract: it resolves EF runtime types, including proxies, and attaches a detached aggregate when exactly one supplied context maps its type; when several contexts map it, attach it to the intended context first.
 
@@ -189,9 +189,9 @@ Pending physical deletions remain in EF tracking while `PublishDomainEventsBehav
 
 #### Optimistic concurrency
 
-During model finalization, `WriteDbContext` maps a shadow `uint` property named `xmin` as a row version for keyed domain `IEntity` types mapped to tables. Aggregate roots are included through `IEntity`. Existing `uint` row-version properties are reused, and standalone non-domain types, keyless models, and entities stored inside JSON documents do not receive a separate token. Owned types sharing a row share its token; JSON data belongs to its containing row. Domain classes do not need PostgreSQL properties or attributes.
+During model finalization, `WriteDbContext` maps a shadow `uint` property named `xmin` as a row version for keyed domain `IEntity` types mapped to tables. Aggregate roots are included through `IEntity`. In TPH and TPC hierarchies, the token is configured on the hierarchy root when any mapped type implements `IEntity`, even if the root does not. Existing `uint` row-version properties are reused, and standalone non-domain types, keyless models, and entities stored inside JSON documents do not receive a separate token. Owned types sharing a row share its token; JSON data belongs to its containing row. Domain classes do not need PostgreSQL properties or attributes.
 
-Domain hierarchies using table-per-type (TPT) mapping are rejected during model construction, including hierarchies with an explicit row-version property. A token on the base table cannot protect updates confined to a derived table. Use table-per-hierarchy (TPH) or table-per-concrete-type (TPC) mapping instead.
+Domain hierarchies using table-per-type (TPT) mapping and domain entities using entity splitting (`SplitToTable`) are rejected during model construction, including mappings with an explicit row-version property. A token on one table cannot protect updates confined to another table. Use table-per-hierarchy (TPH) or table-per-concrete-type (TPC) mapping and map each entity to a single table.
 
 Inheriting from `Entity<TId>` or `AggregateRoot<TId>` does not by itself create an EF inheritance hierarchy. When only a concrete aggregate is registered in the EF model, its inherited properties belong to that aggregate's table; the domain base classes are not separately mapped entity types.
 

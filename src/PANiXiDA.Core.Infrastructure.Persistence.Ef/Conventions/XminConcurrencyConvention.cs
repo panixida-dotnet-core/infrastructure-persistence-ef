@@ -15,7 +15,7 @@ internal sealed class XminConcurrencyConvention : IModelFinalizingConvention
     {
         foreach (var entityType in modelBuilder.Metadata.GetEntityTypes())
         {
-            if (!typeof(IEntity).IsAssignableFrom(entityType.ClrType)
+            if (!entityType.GetDerivedTypesInclusive().Any(type => typeof(IEntity).IsAssignableFrom(type.ClrType))
                 || entityType.FindPrimaryKey() is null
                 || (entityType.GetTableName() is null && !entityType.GetDerivedTypes().Any(derived => derived.GetTableName() is not null))
                 || entityType.IsMappedToJson())
@@ -26,6 +26,11 @@ internal sealed class XminConcurrencyConvention : IModelFinalizingConvention
             if (entityType.GetMappingStrategy() == RelationalAnnotationNames.TptMappingStrategy)
             {
                 throw new InvalidOperationException($"Automatic xmin concurrency does not support TPT mapping for domain entity '{entityType.Name}'. Use TPH or TPC mapping instead.");
+            }
+
+            if (entityType.GetMappingFragments(StoreObjectType.Table).Any())
+            {
+                throw new InvalidOperationException($"Automatic xmin concurrency does not support entity splitting for domain entity '{entityType.Name}'. Map the entity to a single table instead.");
             }
 
             if (entityType.BaseType is not null)

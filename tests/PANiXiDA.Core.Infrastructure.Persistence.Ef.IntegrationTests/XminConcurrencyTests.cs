@@ -14,6 +14,58 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests;
 [Collection(PostgreSqlCollection.Name)]
 public sealed class XminConcurrencyTests(PostgreSqlContainerFixture fixture)
 {
+    [Theory(DisplayName = "Automatic xmin rejects entity splitting even with an explicit row version")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Model_RejectsEntitySplitting(bool explicitVersion)
+    {
+        using var context = explicitVersion
+            ? (DbContext)new ExplicitSplitWriteDbContext(fixture.CreateOptions<ExplicitSplitWriteDbContext>("unused"))
+            : new SplitWriteDbContext(fixture.CreateOptions<SplitWriteDbContext>("unused"));
+
+        var act = () => context.Model;
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*xmin*entity splitting*");
+    }
+
+    [Theory(DisplayName = "Automatic xmin protects domain descendants of non-domain hierarchy roots")]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task SaveChanges_ProtectsDomainDescendant(bool useTpc, bool delete)
+    {
+        var database = PostgreSqlContainerFixture.CreateDatabaseName();
+        await using var stale = CreateMixedHierarchyContext(database, useTpc);
+        await stale.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
+        stale.Add(new DomainDescendant { Name = "Original" });
+        await stale.SaveChangesAsync(TestContext.Current.CancellationToken);
+        stale.ChangeTracker.Clear();
+        var entity = await stale.Set<DomainDescendant>().SingleAsync(TestContext.Current.CancellationToken);
+        await using var current = CreateMixedHierarchyContext(database, useTpc);
+        var changed = await current.Set<DomainDescendant>().SingleAsync(TestContext.Current.CancellationToken);
+        changed.Name = "Concurrent update";
+        await current.SaveChangesAsync(TestContext.Current.CancellationToken);
+        if (delete)
+        {
+            stale.Remove(entity);
+        }
+        else
+        {
+            entity.Name = "Stale update";
+        }
+
+        Func<Task> act = () => stale.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        await act.Should().ThrowAsync<ConcurrencyException>();
+        var token = stale.Model.FindEntityType(typeof(DomainDescendant))!.GetProperty("xmin");
+        token.DeclaringType.ClrType.Should().Be<NonDomainBase>();
+        token.IsConcurrencyToken.Should().BeTrue();
+        current.ChangeTracker.Clear();
+        (await current.Set<DomainDescendant>().SingleAsync(TestContext.Current.CancellationToken)).Name
+            .Should().Be("Concurrent update");
+    }
+
     [Fact(DisplayName = "Automatic xmin protects concrete rows inherited from an abstract TPC domain entity")]
     public async Task SaveChanges_TpcHierarchyRejectsStaleDerivedUpdate()
     {
@@ -179,6 +231,82 @@ public sealed class XminConcurrencyTests(PostgreSqlContainerFixture fixture)
     private Task<XminWriteDbContext> CreateContextAsync()
     {
         return fixture.CreateInitializedDbContextAsync<XminWriteDbContext>(options => new(options));
+    }
+
+    private DbContext CreateMixedHierarchyContext(string database, bool useTpc)
+    {
+        return useTpc
+            ? fixture.CreateDbContext<MixedTpcWriteDbContext>(database, options => new(options))
+            : fixture.CreateDbContext<MixedTphWriteDbContext>(database, options => new(options));
+    }
+
+    private static void ConfigureSplitEntity(ModelBuilder modelBuilder, bool explicitVersion)
+    {
+        var builder = modelBuilder.Entity<SplitEntity>().ToTable("split_entities");
+        builder.SplitToTable("split_details", table =>
+        {
+            table.Property(entity => entity.Id);
+            table.Property(entity => entity.Details);
+        });
+        if (explicitVersion)
+        {
+            builder.Property<uint>("Version").IsRowVersion();
+        }
+    }
+
+    private sealed class SplitEntity : IEntity
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string Details { get; set; } = string.Empty;
+    }
+
+    private sealed class SplitWriteDbContext(DbContextOptions<SplitWriteDbContext> options)
+        : WriteDbContext<SplitWriteDbContext>(options, [])
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            ConfigureSplitEntity(modelBuilder, false);
+        }
+    }
+
+    private sealed class ExplicitSplitWriteDbContext(DbContextOptions<ExplicitSplitWriteDbContext> options)
+        : WriteDbContext<ExplicitSplitWriteDbContext>(options, [])
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            ConfigureSplitEntity(modelBuilder, true);
+        }
+    }
+
+    private abstract class NonDomainBase
+    {
+        public Guid Id { get; set; } = Guid.NewGuid();
+    }
+
+    private sealed class DomainDescendant : NonDomainBase, IEntity
+    {
+        public string Name { get; set; } = string.Empty;
+    }
+
+    private sealed class MixedTphWriteDbContext(DbContextOptions<MixedTphWriteDbContext> options)
+        : WriteDbContext<MixedTphWriteDbContext>(options, [])
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<NonDomainBase>().UseTphMappingStrategy();
+            modelBuilder.Entity<DomainDescendant>();
+        }
+    }
+
+    private sealed class MixedTpcWriteDbContext(DbContextOptions<MixedTpcWriteDbContext> options)
+        : WriteDbContext<MixedTpcWriteDbContext>(options, [])
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<NonDomainBase>().UseTpcMappingStrategy();
+            modelBuilder.Entity<DomainDescendant>();
+        }
     }
 
     private sealed class XminRepository(XminWriteDbContext context)

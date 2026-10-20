@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 using PANiXiDA.Core.Application.Persistence;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.Constants;
+using PANiXiDA.Core.Infrastructure.Persistence.Ef.DbContexts;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.DependencyInjection;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.DbContexts;
 using PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests.Entities;
@@ -24,6 +25,39 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.IntegrationTests;
 [Collection(PostgreSqlCollection.Name)]
 public sealed class ServiceCollectionExtensionsTests(PostgreSqlContainerFixture fixture)
 {
+    [Theory(DisplayName = "Resolving the aggregate tracker disposes each write context exactly once")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AggregateTracker_DisposesWriteContextsOnce(bool asynchronous)
+    {
+        var services = new ServiceCollection();
+        var configuration = fixture.CreateConfiguration();
+        services.AddPostgreSqlWriteEfRepository<DisposalWriteDbContext<int>>(configuration);
+        services.RemoveAll<IAssemblyWriteRepository>();
+        services.AddPostgreSqlWriteEfRepository<DisposalWriteDbContext<int>>(configuration);
+        services.RemoveAll<IAssemblyWriteRepository>();
+        services.AddPostgreSqlWriteEfRepository<DisposalWriteDbContext<string>>(configuration);
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        var scope = provider.CreateAsyncScope();
+        var first = scope.ServiceProvider.GetRequiredService<DisposalWriteDbContext<int>>();
+        var second = scope.ServiceProvider.GetRequiredService<DisposalWriteDbContext<string>>();
+        _ = scope.ServiceProvider.GetRequiredService<IAggregateTracker>();
+
+        if (asynchronous)
+        {
+            await scope.DisposeAsync();
+        }
+        else
+        {
+            scope.Dispose();
+        }
+
+        first.DisposeCallCount.Should().Be(asynchronous ? 0 : 1);
+        first.DisposeAsyncCallCount.Should().Be(asynchronous ? 1 : 0);
+        second.DisposeCallCount.Should().Be(asynchronous ? 0 : 1);
+        second.DisposeAsyncCallCount.Should().Be(asynchronous ? 1 : 0);
+    }
+
     [Fact(DisplayName = "AggregateTracker collects pending deletions from multiple write contexts before saving")]
     public async Task AggregateTracker_CollectsPendingDeletionsFromAllWriteContexts()
     {
@@ -82,7 +116,6 @@ public sealed class ServiceCollectionExtensionsTests(PostgreSqlContainerFixture 
         tracker.Track(secondAggregate);
 
         tracker.GetAll().Should().BeEquivalentTo([firstAggregate, secondAggregate]);
-        scope.ServiceProvider.GetServices<DbContext>().Should().Equal(first, second);
         scope.ServiceProvider.GetRequiredService<IAggregateTracker>().Should().BeSameAs(tracker);
         using var otherScope = provider.CreateScope();
         otherScope.ServiceProvider.GetRequiredService<IAggregateTracker>().GetAll().Should().BeEmpty();
@@ -278,5 +311,24 @@ public sealed class ServiceCollectionExtensionsTests(PostgreSqlContainerFixture 
             descriptor.ServiceType == typeof(TService)
                 && descriptor.ImplementationType == typeof(TImplementation)
                 && descriptor.Lifetime == ServiceLifetime.Scoped);
+    }
+
+    private sealed class DisposalWriteDbContext<TMarker>(DbContextOptions<DisposalWriteDbContext<TMarker>> options)
+        : WriteDbContext<DisposalWriteDbContext<TMarker>>(options, [])
+    {
+        public int DisposeCallCount { get; private set; }
+        public int DisposeAsyncCallCount { get; private set; }
+
+        public override void Dispose()
+        {
+            DisposeCallCount++;
+            base.Dispose();
+        }
+
+        public override ValueTask DisposeAsync()
+        {
+            DisposeAsyncCallCount++;
+            return base.DisposeAsync();
+        }
     }
 }
