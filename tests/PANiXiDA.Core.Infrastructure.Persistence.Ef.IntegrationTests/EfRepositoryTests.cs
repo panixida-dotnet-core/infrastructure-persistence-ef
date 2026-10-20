@@ -16,7 +16,7 @@ public sealed class EfRepositoryTests(PostgreSqlContainerFixture fixture)
     public async Task Add_DefersInsertionUntilSave()
     {
         await using var context = await CreateContextAsync();
-        var tracker = new AggregateTracker([context]);
+        var tracker = new AggregateTracker([() => context]);
         var repository = new ExposedWriteRepository(context);
         var aggregateRoot = new TestAggregateRoot(TestAggregateRootId.New())
         {
@@ -85,7 +85,7 @@ public sealed class EfRepositoryTests(PostgreSqlContainerFixture fixture)
         await context.SaveChangesAsync(TestContext.Current.CancellationToken);
         context.ChangeTracker.Clear();
 
-        var tracker = new AggregateTracker([context]);
+        var tracker = new AggregateTracker([() => context]);
         var repository = new ExposedWriteRepository(context);
         aggregateRoot = (await repository.GetByIdAsync(aggregateRoot.Id, TestContext.Current.CancellationToken))!;
         aggregateRoot.Name = "Updated";
@@ -117,7 +117,7 @@ public sealed class EfRepositoryTests(PostgreSqlContainerFixture fixture)
         context.Aggregates.Add(aggregateRoot);
         await context.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        var tracker = new AggregateTracker([context]);
+        var tracker = new AggregateTracker([() => context]);
         var repository = new ExposedWriteRepository(context);
 
         repository.Delete(aggregateRoot);
@@ -152,7 +152,7 @@ public sealed class EfRepositoryTests(PostgreSqlContainerFixture fixture)
     public async Task AggregateTracker_ReturnsTrackedRootsAndCanClearThem()
     {
         await using var context = await CreateContextAsync();
-        var tracker = new AggregateTracker([context]);
+        var tracker = new AggregateTracker([() => context]);
         var aggregateRoot = new TestAggregateRoot(TestAggregateRootId.New());
 
         tracker.Track(aggregateRoot);

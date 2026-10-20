@@ -12,6 +12,32 @@ namespace PANiXiDA.Core.Infrastructure.Persistence.Ef.UnitTests;
 
 public sealed class AggregateTrackerTests
 {
+    [Fact(DisplayName = "AggregateTracker resolves each factory once and accepts duplicate context instances")]
+    public void Constructor_ResolvesContextsOnceAndDeduplicates()
+    {
+        // Arrange
+        using var context = new TrackerDbContext();
+        var resolutionCount = 0;
+        DbContext ResolveContext()
+        {
+            resolutionCount++;
+            return context;
+        }
+        var aggregate = new TestAggregateRoot(TestAggregateRootId.New());
+
+        // Act
+        using var tracker = new AggregateTracker([ResolveContext, ResolveContext]);
+        tracker.Track(aggregate);
+        tracker.GetAll().Should().ContainSingle().Which.Should().BeSameAs(aggregate);
+        tracker.Clear();
+        tracker.Track(aggregate);
+
+        // Assert
+        tracker.GetAll().Should().ContainSingle().Which.Should().BeSameAs(aggregate);
+        context.Entry(aggregate).State.Should().Be(EntityState.Unchanged);
+        resolutionCount.Should().Be(2);
+    }
+
     [Theory(DisplayName = "New events make a cleared EF aggregate visible without explicit tracking")]
     [InlineData(false)]
     [InlineData(true)]
@@ -19,7 +45,7 @@ public sealed class AggregateTrackerTests
     {
         // Arrange
         using var context = new TrackerDbContext();
-        using var tracker = new AggregateTracker([context]);
+        using var tracker = new AggregateTracker([() => context]);
         var aggregate = new MappedAggregate(TestAggregateRootId.New());
         context.Attach(aggregate);
         aggregate.RaiseEvent();
@@ -49,7 +75,7 @@ public sealed class AggregateTrackerTests
     public void Track_ResolvesRuntimeType(bool attached)
     {
         using var context = new TrackerDbContext();
-        using var tracker = new AggregateTracker([context]);
+        using var tracker = new AggregateTracker([() => context]);
         var aggregate = new RuntimeAggregate(TestAggregateRootId.New());
         if (attached)
         {
@@ -68,7 +94,7 @@ public sealed class AggregateTrackerTests
     public void Clear_ReleasesDetachedAggregates(bool clearChangeTracker)
     {
         using var context = new TrackerDbContext();
-        using var tracker = new AggregateTracker([context]);
+        using var tracker = new AggregateTracker([() => context]);
         var reference = TrackAndReleaseAggregate(context, tracker, clearChangeTracker);
 
         GC.Collect();
@@ -84,7 +110,7 @@ public sealed class AggregateTrackerTests
     public void GetAll_ReadsEfTrackedAggregates()
     {
         using var context = new TrackerDbContext();
-        using var tracker = new AggregateTracker([context]);
+        using var tracker = new AggregateTracker([() => context]);
         var aggregate = new TestAggregateRoot(TestAggregateRootId.New());
         context.Add(aggregate);
         context.Add(new OtherEntity { Id = 1 });
@@ -98,7 +124,7 @@ public sealed class AggregateTrackerTests
     public void Track_AttachesDetachedAggregateAndPreservesState()
     {
         using var context = new TrackerDbContext();
-        using var tracker = new AggregateTracker([context]);
+        using var tracker = new AggregateTracker([() => context]);
         var aggregate = new TestAggregateRoot(TestAggregateRootId.New());
 
         tracker.Track(aggregate);
@@ -115,7 +141,7 @@ public sealed class AggregateTrackerTests
     {
         using var first = new TrackerDbContext();
         using var second = new TrackerDbContext();
-        using var tracker = new AggregateTracker([first, second, first]);
+        using var tracker = new AggregateTracker([() => first, () => second, () => first]);
         var firstAggregate = new TestAggregateRoot(TestAggregateRootId.New());
         var secondAggregate = new TestAggregateRoot(TestAggregateRootId.New());
         first.Add(firstAggregate);
@@ -136,7 +162,7 @@ public sealed class AggregateTrackerTests
     public void Clear_PreservesEfTrackingAndAllowsRetracking(EntityState state)
     {
         using var context = new TrackerDbContext();
-        using var tracker = new AggregateTracker([context]);
+        using var tracker = new AggregateTracker([() => context]);
         var aggregate = new TestAggregateRoot(TestAggregateRootId.New());
         context.Entry(aggregate).Property<uint>("xmin").CurrentValue = 42;
         context.Attach(aggregate);
@@ -155,7 +181,7 @@ public sealed class AggregateTrackerTests
     public void GetAll_FollowsEfDetachment()
     {
         using var context = new TrackerDbContext();
-        using var tracker = new AggregateTracker([context]);
+        using var tracker = new AggregateTracker([() => context]);
         var detached = new TestAggregateRoot(TestAggregateRootId.New());
         var deleted = new TestAggregateRoot(TestAggregateRootId.New());
         context.AttachRange(detached, deleted);
@@ -175,26 +201,26 @@ public sealed class AggregateTrackerTests
     {
         using var first = new TrackerDbContext();
         using var second = new TrackerDbContext();
-        using var tracker = new AggregateTracker(ambiguous ? [first, second] : []);
+        using var tracker = new AggregateTracker(ambiguous ? [() => first, () => second] : []);
 
         var act = () => tracker.Track(new TestAggregateRoot(TestAggregateRootId.New()));
 
         act.Should().Throw<InvalidOperationException>().WithMessage("*exactly one write DbContext*");
     }
 
-    [Fact(DisplayName = "AggregateTracker rejects null entries in the context collection")]
-    public void Constructor_RejectsNullContextEntries()
+    [Fact(DisplayName = "AggregateTracker rejects factories returning null contexts")]
+    public void Constructor_RejectsNullContextResults()
     {
-        var nullContext = () => new AggregateTracker([null!]);
+        var nullContext = () => new AggregateTracker([() => null!]);
 
-        nullContext.Should().Throw<ArgumentException>().WithParameterName("dbContexts");
+        nullContext.Should().Throw<ArgumentException>().WithParameterName("dbContextFactories");
     }
 
     [Fact(DisplayName = "AggregateTracker Dispose does not dispose contexts")]
     public void Dispose_DoesNotDisposeContexts()
     {
         using var context = new TrackerDbContext();
-        var tracker = new AggregateTracker([context]);
+        var tracker = new AggregateTracker([() => context]);
         var aggregate = new TestAggregateRoot(TestAggregateRootId.New());
         context.Attach(aggregate);
 
@@ -224,7 +250,7 @@ public sealed class AggregateTrackerTests
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static WeakReference<AggregateTracker> CreateAndDisposeTracker(TrackerDbContext context)
     {
-        var tracker = new AggregateTracker([context]);
+        var tracker = new AggregateTracker([() => context]);
         tracker.Dispose();
         return new WeakReference<AggregateTracker>(tracker);
     }

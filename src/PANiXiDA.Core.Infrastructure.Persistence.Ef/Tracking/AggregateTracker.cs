@@ -16,15 +16,17 @@ public sealed class AggregateTracker : IAggregateTracker, IDisposable
     private readonly ConditionalWeakTable<IAggregateRoot, HashSet<Guid>> clearedEventIds = [];
 
     /// <summary>
-    /// Initializes a tracker for the specified write DbContexts without taking ownership of them.
+    /// Resolves the write DbContexts for this persistence scope without taking ownership of them.
     /// </summary>
-    /// <param name="dbContexts">The write DbContexts participating in this persistence scope.</param>
-    public AggregateTracker(IEnumerable<DbContext> dbContexts)
+    /// <param name="dbContextFactories">Factories that return the existing scoped write DbContexts.</param>
+    public AggregateTracker(IEnumerable<Func<DbContext>> dbContextFactories)
     {
-        this.dbContexts = [.. dbContexts.Distinct<DbContext>(ReferenceEqualityComparer.Instance)];
-        if (this.dbContexts.Any(dbContext => dbContext is null))
+        dbContexts = [.. dbContextFactories
+            .Select(resolve => resolve())
+            .Distinct<DbContext>(ReferenceEqualityComparer.Instance)];
+        if (dbContexts.Any(dbContext => dbContext is null))
         {
-            throw new ArgumentException("Write DbContexts cannot contain null entries.", nameof(dbContexts));
+            throw new ArgumentException("Write DbContexts cannot contain null entries.", nameof(dbContextFactories));
         }
     }
 

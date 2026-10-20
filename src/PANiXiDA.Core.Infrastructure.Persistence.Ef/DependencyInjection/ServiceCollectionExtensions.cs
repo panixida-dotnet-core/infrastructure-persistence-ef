@@ -134,17 +134,8 @@ public static class ServiceCollectionExtensions
         serviceCollection.TryAddEnumerable(
             ServiceDescriptor.Scoped<IInterceptor, AuditSaveChangesInterceptor>());
 
-        static DbContext ResolveContext(IServiceProvider provider)
-        {
-            return provider.GetRequiredService<TWriteDbContext>();
-        }
-
-        serviceCollection.AddSingleton<Func<IServiceProvider, DbContext>>(ResolveContext);
-
-        serviceCollection.TryAddScoped<IEnumerable<DbContext>>(provider =>
-            [.. provider.GetServices<Func<IServiceProvider, DbContext>>()
-                .Select(resolve => resolve(provider))
-                .Distinct<DbContext>(ReferenceEqualityComparer.Instance)]);
+        serviceCollection.AddScoped<Func<DbContext>>(provider =>
+            provider.GetRequiredService<TWriteDbContext>);
 
         serviceCollection.TryAddScoped<IAggregateTracker, AggregateTracker>();
 

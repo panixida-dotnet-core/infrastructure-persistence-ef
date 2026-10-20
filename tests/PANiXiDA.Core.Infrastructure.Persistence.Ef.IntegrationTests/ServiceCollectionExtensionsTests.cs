@@ -42,7 +42,6 @@ public sealed class ServiceCollectionExtensionsTests(PostgreSqlContainerFixture 
         var first = scope.ServiceProvider.GetRequiredService<DisposalWriteDbContext<int>>();
         var second = scope.ServiceProvider.GetRequiredService<DisposalWriteDbContext<string>>();
         _ = scope.ServiceProvider.GetRequiredService<IAggregateTracker>();
-        var contexts = scope.ServiceProvider.GetServices<DbContext>().ToArray();
 
         if (asynchronous)
         {
@@ -53,7 +52,6 @@ public sealed class ServiceCollectionExtensionsTests(PostgreSqlContainerFixture 
             scope.Dispose();
         }
 
-        contexts.Should().Equal(first, second);
         first.DisposeCallCount.Should().Be(asynchronous ? 0 : 1);
         first.DisposeAsyncCallCount.Should().Be(asynchronous ? 1 : 0);
         second.DisposeCallCount.Should().Be(asynchronous ? 0 : 1);
@@ -119,9 +117,6 @@ public sealed class ServiceCollectionExtensionsTests(PostgreSqlContainerFixture 
         tracker.Track(secondAggregate);
 
         tracker.GetAll().Should().BeEquivalentTo([firstAggregate, secondAggregate]);
-        var contexts = scope.ServiceProvider.GetServices<DbContext>();
-        contexts.Should().Equal(first, second);
-        scope.ServiceProvider.GetServices<DbContext>().Should().BeSameAs(contexts);
         scope.ServiceProvider.GetRequiredService<IAggregateTracker>().Should().BeSameAs(tracker);
         using var otherScope = provider.CreateScope();
         otherScope.ServiceProvider.GetRequiredService<IAggregateTracker>().GetAll().Should().BeEmpty();
