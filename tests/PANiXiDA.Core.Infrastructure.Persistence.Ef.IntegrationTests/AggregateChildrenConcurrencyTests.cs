@@ -21,7 +21,6 @@ public sealed class AggregateChildrenConcurrencyTests(PostgreSqlContainerFixture
     [InlineData(ChildChange.Delete)]
     public async Task SaveChanges_ChildChangeRefreshesRootVersion(ChildChange change)
     {
-        // Arrange
         var clock = new TestTimeProvider();
         await using var context = await fixture.CreateInitializedDbContextAsync<ChildrenWriteDbContext>(options => new(options, clock));
         var aggregate = new ParentAggregate(TestAggregateRootId.New());
@@ -35,13 +34,11 @@ public sealed class AggregateChildrenConcurrencyTests(PostgreSqlContainerFixture
         var originalUpdatedAt = context.Entry(loaded).Property<DateTime>("UpdatedAt").CurrentValue;
         clock.Advance();
 
-        // Act
         ChangeChild(loaded, change);
         repository.Update(loaded);
         context.Entry(loaded).Property<uint>("xmin").CurrentValue.Should().Be(originalVersion);
         await new EfUnitOfWork<ChildrenWriteDbContext>(context).SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        // Assert
         var savedVersion = context.Entry(loaded).Property<uint>("xmin").CurrentValue;
         savedVersion.Should().NotBe(originalVersion);
         context.Entry(loaded).Property<DateTime>("UpdatedAt").CurrentValue.Should().BeAfter(originalUpdatedAt);
@@ -66,7 +63,6 @@ public sealed class AggregateChildrenConcurrencyTests(PostgreSqlContainerFixture
     [InlineData(ChildChange.Delete)]
     public async Task SaveChanges_ChildChangeRejectsStaleRoot(ChildChange change)
     {
-        // Arrange
         var database = PostgreSqlContainerFixture.CreateDatabaseName();
         var clock = new TestTimeProvider();
         await using var stale = await fixture.CreateInitializedDbContextAsync<ChildrenWriteDbContext>(database, options => new(options, clock));
@@ -81,7 +77,6 @@ public sealed class AggregateChildrenConcurrencyTests(PostgreSqlContainerFixture
 
         await using var current = fixture.CreateDbContext<ChildrenWriteDbContext>(database, options => new(options, clock));
         var currentRepository = new ChildrenRepository(current);
-        // Adding a child does not require loading existing children or updating their rows.
         var winner = await current.Set<ParentAggregate>().SingleAsync(TestContext.Current.CancellationToken);
         winner.AddChild("Concurrent addition");
         clock.Advance();
@@ -92,11 +87,9 @@ public sealed class AggregateChildrenConcurrencyTests(PostgreSqlContainerFixture
         ChangeChild(loaded, change);
         clock.Advance();
 
-        // Act
         staleRepository.Update(loaded);
         Func<Task> act = () => new EfUnitOfWork<ChildrenWriteDbContext>(stale).SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        // Assert
         var exception = (await act.Should().ThrowAsync<ConcurrencyException>()).Which;
         var inner = exception.InnerException.Should().BeOfType<DbUpdateConcurrencyException>().Subject;
         inner.Entries.Should().Contain(entry => ReferenceEquals(entry.Entity, loaded));

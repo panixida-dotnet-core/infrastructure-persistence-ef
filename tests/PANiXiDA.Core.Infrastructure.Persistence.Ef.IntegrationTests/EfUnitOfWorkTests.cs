@@ -18,17 +18,14 @@ public sealed class EfUnitOfWorkTests(PostgreSqlContainerFixture fixture)
     [InlineData(true)]
     public async Task SaveChangesAsync_DoesNotCommitTransaction(bool commit)
     {
-        // Arrange
         var options = await CreateInitializedOptionsAsync();
         await using var context = new TransactionalDbContext(options);
         var unitOfWork = new EfUnitOfWork<TransactionalDbContext>(context);
         await unitOfWork.BeginTransactionAsync(TestContext.Current.CancellationToken);
         context.Entities.Add(new TransactionalEntity { Id = 1, Name = "Pending" });
 
-        // Act
         await unitOfWork.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        // Assert
         unitOfWork.HasActiveTransaction.Should().BeTrue();
         (await context.Entities.CountAsync(TestContext.Current.CancellationToken)).Should().Be(1);
         (await CountEntitiesAsync(options)).Should().Be(0);

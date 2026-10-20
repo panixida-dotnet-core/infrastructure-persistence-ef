@@ -15,7 +15,6 @@ public sealed class AggregateTrackerTests
     [Fact(DisplayName = "AggregateTracker resolves each factory once and accepts duplicate context instances")]
     public void Constructor_ResolvesContextsOnceAndDeduplicates()
     {
-        // Arrange
         using var context = new TrackerDbContext();
         var resolutionCount = 0;
         DbContext ResolveContext()
@@ -25,14 +24,12 @@ public sealed class AggregateTrackerTests
         }
         var aggregate = new TestAggregateRoot(TestAggregateRootId.New());
 
-        // Act
         using var tracker = new AggregateTracker([ResolveContext, ResolveContext]);
         tracker.Track(aggregate);
         tracker.GetAll().Should().ContainSingle().Which.Should().BeSameAs(aggregate);
         tracker.Clear();
         tracker.Track(aggregate);
 
-        // Assert
         tracker.GetAll().Should().ContainSingle().Which.Should().BeSameAs(aggregate);
         context.Entry(aggregate).State.Should().Be(EntityState.Unchanged);
         resolutionCount.Should().Be(2);
@@ -43,7 +40,6 @@ public sealed class AggregateTrackerTests
     [InlineData(true)]
     public void GetAll_RediscoversNewEventsAfterClear(bool clearEventsFirst)
     {
-        // Arrange
         using var context = new TrackerDbContext();
         using var tracker = new AggregateTracker([() => context]);
         var aggregate = new MappedAggregate(TestAggregateRootId.New());
@@ -56,10 +52,8 @@ public sealed class AggregateTrackerTests
         tracker.Clear();
         tracker.GetAll().Should().BeEmpty();
 
-        // Act
         aggregate.RaiseEvent();
 
-        // Assert
         tracker.GetAll().Should().ContainSingle().Which.Should().BeSameAs(aggregate);
         context.Entry(aggregate).State.Should().Be(EntityState.Unchanged);
         tracker.Clear();
